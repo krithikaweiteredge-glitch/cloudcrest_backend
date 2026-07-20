@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import dns from "dns";
 
 export async function sendOtpEmail(email: string, code: string): Promise<boolean> {
   const host = process.env.SMTP_HOST;
@@ -24,7 +25,12 @@ export async function sendOtpEmail(email: string, code: string): Promise<boolean
         user,
         pass,
       },
-    });
+      connectionTimeout: 10000,
+      // Force IPv4 lookup to bypass unreachable IPv6 connections on Render
+      lookup: (hostname: string, options: any, callback: any) => {
+        dns.lookup(hostname, { family: 4 }, callback);
+      },
+    } as any);
 
     await transporter.sendMail({
       from: `"Cloudcrest Compliance" <${from}>`,
