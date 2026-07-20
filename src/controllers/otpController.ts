@@ -173,3 +173,124 @@ export async function verifyOtp(req: Request, res: Response) {
     });
   }
 }
+
+// 3. FIREBASE PHONE AUTHENTICATION LOGIN
+import { verifyFirebaseToken } from "../utils/firebase.js";
+
+export async function firebaseLogin(req: Request, res: Response) {
+  try {
+    const { firebaseToken } = req.body;
+    if (!firebaseToken) {
+      return res.status(400).json({ error: "Firebase ID token is required" });
+    }
+
+    const payload = await verifyFirebaseToken(firebaseToken);
+    if (!payload || !payload.phoneNumber) {
+      return res.status(400).json({ error: "Invalid or expired Firebase verification token" });
+    }
+
+    const phone = payload.phoneNumber;
+
+    // Check if user already exists with this phone number
+    let userList = await db
+      .select({
+        id: users.id,
+        roleId: users.roleId,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        phone: users.phone,
+        status: users.status,
+        createdAt: users.createdAt,
+        roleName: roles.name,
+      })
+      .from(users)
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(users.phone, phone))
+      .limit(1);
+
+    let loggedInUser;
+    let isNewUser = false;
+
+    if (userList.length === 0) {
+      // If user does not exist by phone, generate placeholder email to satisfy DB non-null constraints
+      const emailPlaceholder = `phone_${phone.replace(/\+/g, "")}@mobile-otp.cloudcrest.com`;
+
+      const emailCheck = await db.select().from(users).where(eq(users.email, emailPlaceholder)).limit(1);
+      if (emailCheck.length > 0) {
+        return res.status(400).json({ error: "A user account with this phone already exists under a conflicting email" });
+      }
+
+      isNewUser = true;
+
+      // Get Customer role ID
+      const customerRole = await db
+        .select()
+        .from(roles)
+        .where(eq(roles.name, "Customer"))
+        .limit(1);
+
+      const defaultRoleId = customerRole[0]?.id || 1;
+      const roleName = customerRole[0]?.name || "Customer";
+      const defaultFirstName = `User_${phone.slice(-4)}`;
+
+      const newUsers = await db
+        .insert(users)
+        .values({
+          firstName: defaultFirstName,
+          email: emailPlaceholder,
+          phone: phone,
+          passwordHash: "FIREBASE_VERIFIED_USER",
+          roleId: defaultRoleId,
+          status: "active",
+        })
+        .returning();
+
+      loggedInUser = {
+        ...newUsers[0],
+        roleName,
+      };
+    } else {
+      loggedInUser = userList[0];
+    }
+
+    if (loggedInUser.status !== "active") {
+      return res.status(403).json({ error: "This account has been deactivated" });
+    }
+
+    // Sign session token
+    const token = await createSessionToken({
+      userId: loggedInUser.id,
+      email: loggedInUser.email,
+      roleId: loggedInUser.roleId,
+      roleName: loggedInUser.roleName || "Customer",
+    });
+
+    // Set cookie
+    res.cookie("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    });
+
+    return res.status(200).json({
+      message: isNewUser ? "Account created and logged in successfully" : "Logged in successfully",
+      user: {
+        id: loggedInUser.id,
+        firstName: loggedInUser.firstName,
+        lastName: loggedInUser.lastName,
+        email: loggedInUser.email,
+        phone: loggedInUser.phone,
+        roleId: loggedInUser.roleId,
+        roleName: loggedInUser.roleName || "Customer",
+        status: loggedInUser.status,
+        createdAt: loggedInUser.createdAt,
+      },
+    });
+  } catch (error: any) {
+    console.error("Firebase login error:", error);
+    return res.status(500).json({ error: error.message || "Failed to authenticate via Firebase token" });
+  }
+}

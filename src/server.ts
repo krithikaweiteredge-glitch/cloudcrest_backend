@@ -12,12 +12,18 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(
   cors({
-    origin: ["http://localhost:8080", "http://127.0.0.1:8080"], // Frontend Vite Port
-    credentials: true, // Allow sharing cookies
+    origin: (origin, callback) => {
+      // Allow any origin dynamically to avoid CORS issues across different ports/deployments
+      callback(null, true);
+    },
+    credentials: true,
   })
 );
 app.use(cookieParser());
 app.use(express.json());
+
+// Static uploads folder
+app.use("/uploads", express.static("uploads"));
 
 // Routes
 app.use("/api", router);

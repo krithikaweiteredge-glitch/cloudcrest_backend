@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { db } from "../config/db.js";
-import { businesses, orders, estimates, orderDocuments, documentTypes, services } from "../models/schema.js";
+import { businesses, orders, estimates, orderDocuments, documentTypes, services, orderFieldValues, serviceFields } from "../models/schema.js";
 import { AuthenticatedRequest } from "../middlewares/authMiddleware.js";
 import { eq, and } from "drizzle-orm";
 
@@ -26,6 +26,7 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
       govtFee,
       gst,
       total,
+      fieldValues,
     } = req.body;
 
     // Validation
@@ -33,9 +34,20 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ error: "Missing required registration details" });
     }
 
-    // Determine Service ID based on entityType (1 = Company, 2 = LLP)
+    // Determine Service ID based on entityType dynamically by matching seeded service names
     const isLLP = entityType.toLowerCase().includes("llp") || entityType.toLowerCase().includes("liability");
-    const serviceId = isLLP ? 2 : 1;
+    const serviceName = isLLP ? "LLP Registration" : "Private Limited Company Registration";
+
+    const serviceRecord = await db
+      .select()
+      .from(services)
+      .where(eq(services.name, serviceName))
+      .limit(1);
+
+    if (serviceRecord.length === 0) {
+      return res.status(400).json({ error: `Service '${serviceName}' is not seeded in the database.` });
+    }
+    const serviceId = serviceRecord[0].id;
 
     // A. Insert Business
     const primaryName = names[0];
@@ -95,6 +107,20 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
       total: String(total || 0),
     });
 
+    // D. Insert Dynamic Wizard Field Values
+    if (fieldValues && typeof fieldValues === "object") {
+      for (const [fieldIdStr, val] of Object.entries(fieldValues)) {
+        const fieldId = parseInt(fieldIdStr, 10);
+        if (!isNaN(fieldId) && val !== undefined && val !== null) {
+          await db.insert(orderFieldValues).values({
+            orderId: orderRecord.id,
+            fieldId: fieldId,
+            value: String(val).trim(),
+          });
+        }
+      }
+    }
+
     return res.status(201).json({
       message: "Registration order submitted successfully!",
       order: {
@@ -136,6 +162,64 @@ export async function getCustomerOrders(req: AuthenticatedRequest, res: Response
   } catch (error: any) {
     console.error("Get customer orders error:", error);
     return res.status(500).json({ error: error.message || "Failed to fetch orders" });
+  }
+}
+
+// 1B. GET SPECIFIC CUSTOMER ORDER DETAILS
+export async function getCustomerOrderDetails(req: AuthenticatedRequest, res: Response) {
+  try {
+    const orderId = parseInt(req.params.id as string, 10);
+    const userId = req.user!.id;
+
+    if (isNaN(orderId)) {
+      return res.status(400).json({ error: "Invalid order ID" });
+    }
+
+    const orderCheck = await db
+      .select({
+        id: orders.id,
+        orderNo: orders.orderNo,
+        status: orders.status,
+        paymentStatus: orders.paymentStatus,
+        createdAt: orders.createdAt,
+        serviceId: orders.serviceId,
+        serviceName: services.name,
+        total: estimates.total,
+        businessName: businesses.businessName,
+      })
+      .from(orders)
+      .leftJoin(services, eq(orders.serviceId, services.id))
+      .leftJoin(estimates, eq(orders.id, estimates.orderId))
+      .leftJoin(businesses, eq(orders.businessId, businesses.id))
+      .where(and(eq(orders.id, orderId), eq(orders.customerId, userId)))
+      .limit(1);
+
+    if (orderCheck.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = orderCheck[0];
+
+    // Fetch dynamic field values
+    const fieldAnswers = await db
+      .select({
+        id: orderFieldValues.id,
+        value: orderFieldValues.value,
+        fieldId: orderFieldValues.fieldId,
+        fieldLabel: serviceFields.label,
+        fieldKey: serviceFields.fieldKey,
+      })
+      .from(orderFieldValues)
+      .leftJoin(serviceFields, eq(orderFieldValues.fieldId, serviceFields.id))
+      .where(eq(orderFieldValues.orderId, orderId));
+
+    return res.status(200).json({
+      order,
+      fieldValues: fieldAnswers,
+    });
+  } catch (error: any) {
+    console.error("Get order details error:", error);
+    return res.status(500).json({ error: error.message || "Failed to fetch order details" });
   }
 }
 

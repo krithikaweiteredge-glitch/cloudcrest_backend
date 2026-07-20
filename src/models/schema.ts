@@ -5,3 +5,5 @@ export * from "./schema/orders.js";
 export * from "./schema/documents.js";
 export * from "./schema/workflows.js";
 export * from "./schema/utility.js";
+export * from "./schema/serviceRequests.js";
+

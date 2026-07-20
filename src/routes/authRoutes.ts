@@ -5,7 +5,7 @@ import {
   logoutUser,
   getCurrentUser,
 } from "../controllers/authController.js";
-import { sendOtp, verifyOtp } from "../controllers/otpController.js";
+import { sendOtp, verifyOtp, firebaseLogin } from "../controllers/otpController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 
 const router = Router();
@@ -15,6 +15,7 @@ router.post("/login", loginUser);
 router.post("/logout", logoutUser);
 router.post("/send-otp", sendOtp);
 router.post("/verify-otp", verifyOtp);
+router.post("/firebase-login", firebaseLogin);
 router.get("/me", authMiddleware as any, getCurrentUser as any);
 
 export default router;

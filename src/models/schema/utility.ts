@@ -56,11 +56,23 @@ export const supportTickets = pgTable("support_tickets", {
   customerId: bigint("customer_id", { mode: "number" }).references(() => users.id).notNull(),
   orderId: bigint("order_id", { mode: "number" }).references(() => orders.id),
   subject: varchar("subject", { length: 255 }).notNull(),
-  status: varchar("status", { length: 100 }).default("open").notNull(),
+  status: varchar("status", { length: 100 }).default("pending").notNull(),
 });
 
 export type SupportTicket = InferSelectModel<typeof supportTickets>;
 export type NewSupportTicket = InferInsertModel<typeof supportTickets>;
+
+// 26. TICKET MESSAGES TABLE
+export const ticketMessages = pgTable("ticket_messages", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  ticketId: bigint("ticket_id", { mode: "number" }).references(() => supportTickets.id).notNull(),
+  senderId: bigint("sender_id", { mode: "number" }).references(() => users.id).notNull(),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type TicketMessage = InferSelectModel<typeof ticketMessages>;
+export type NewTicketMessage = InferInsertModel<typeof ticketMessages>;
 
 // 24. ACTIVITY LOGS TABLE
 export const activityLogs = pgTable("activity_logs", {
