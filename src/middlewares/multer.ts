@@ -3,9 +3,14 @@ import fs from "fs";
 import path from "path";
 
 // Ensure local 'uploads' directory exists
-const uploadDir = path.resolve("uploads");
+// On serverless environments like Vercel, the root filesystem is read-only. We use '/tmp/uploads' instead.
+const uploadDir = process.env.VERCEL ? "/tmp/uploads" : path.resolve("uploads");
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch (error) {
+    console.error(`Failed to create upload directory ${uploadDir}:`, error);
+  }
 }
 
 const storage = multer.diskStorage({
