@@ -7,7 +7,6 @@ export async function sendOtpEmail(email: string, code: string): Promise<boolean
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   const from = process.env.SMTP_FROM || user || "no-reply@cloudcrest.com";
-  const resendApiKey = process.env.RESEND_API_KEY;
 
   console.log(`\n======================================================\n[EMAIL OTP] Verification code for ${email}: ${code}\n======================================================\n`);
 
@@ -30,38 +29,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<boolean
     </div>
   `;
 
-  // 1. If Resend API Key is provided, use Resend's Web API (HTTP POST over port 443)
-  if (resendApiKey) {
-    try {
-      console.log(`[EMAIL OTP] Attempting delivery via Resend HTTP Web API...`);
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${resendApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: `Cloudcrest Compliance <${from === "resend" || from.includes("onboarding") ? "onboarding@resend.dev" : from}>`,
-          to: [email],
-          subject: `Your Cloudcrest BM Verification Code: ${code}`,
-          html: htmlContent,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status} Error`);
-      }
-
-      console.log(`[EMAIL OTP] Successfully sent email via Resend Web API!`);
-      return true;
-    } catch (error) {
-      console.error("[EMAIL OTP] Resend API delivery failed:", error);
-      // Fallback to SMTP if Resend fails
-    }
-  }
-
-  // 2. Fallback if no SMTP credentials are provided
+  // Fallback if no SMTP credentials are provided
   if (!host || !user || !pass) {
     console.log(`[EMAIL OTP MOCK] SMTP configuration environment variables missing. OTP code logged to console above.`);
     return true;
@@ -77,7 +45,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<boolean
         pass,
       },
       connectionTimeout: 10000,
-      // Force IPv4 lookup to bypass unreachable IPv6 connections on Render
+      // Force IPv4 lookup to bypass unreachable IPv6 connections on serverless/hosting environments
       lookup: (hostname: string, options: any, callback: any) => {
         dns.lookup(hostname, { family: 4 }, callback);
       },
@@ -91,6 +59,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<boolean
       html: htmlContent,
     });
 
+    console.log(`[EMAIL OTP] Successfully sent SMTP email to ${email}`);
     return true;
   } catch (error) {
     console.error(`Failed to send email to ${email}:`, error);
