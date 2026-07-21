@@ -144,10 +144,11 @@ export async function verifyOtp(req: Request, res: Response) {
     });
 
     // Set HTTP-only secure cookie
+    const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
     res.cookie("auth_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       path: "/",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     });
@@ -267,10 +268,11 @@ export async function firebaseLogin(req: Request, res: Response) {
     });
 
     // Set cookie
+    const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
     res.cookie("auth_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       path: "/",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     });

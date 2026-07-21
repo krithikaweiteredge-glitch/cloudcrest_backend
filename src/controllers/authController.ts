@@ -71,10 +71,11 @@ export async function registerUser(req: Request, res: Response) {
     });
 
     // Set secure cookie
+    const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
     res.cookie("auth_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       path: "/",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days in ms
     });
@@ -169,10 +170,11 @@ export async function loginUser(req: Request, res: Response) {
     };
 
     // Set secure cookie
+    const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
     res.cookie("auth_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
       path: "/",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days in ms
     });
@@ -191,11 +193,12 @@ export async function loginUser(req: Request, res: Response) {
 
 // 3. LOGOUT
 export function logoutUser(req: Request, res: Response) {
+  const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
   res.clearCookie("auth_token", {
     path: "/",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
   });
   return res.status(200).json({ message: "Logged out successfully" });
 }
