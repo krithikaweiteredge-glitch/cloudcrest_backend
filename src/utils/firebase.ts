@@ -31,15 +31,28 @@ export function initializeFirebase() {
   return false;
 }
 
+export type FirebaseIdentity = {
+  uid?: string;
+  phoneNumber?: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+  emailVerified?: boolean;
+};
+
 /**
- * Verifies a Firebase ID token.
- * Supports sandbox test tokens prefixed with "TEST_FIREBASE_TOKEN_FOR_" to bypass 
- * network checks during E2E automated local test runs.
+ * Verifies a Firebase ID token and returns the decoded identity (phone and/or Google).
+ * Supports sandbox test tokens prefixed with "TEST_FIREBASE_TOKEN_FOR_" to bypass
+ * network checks during E2E automated local test runs. If the suffix looks like an
+ * email it is treated as a Google identity, otherwise as a phone number.
  */
-export async function verifyFirebaseToken(token: string): Promise<{ phoneNumber?: string } | null> {
+export async function verifyFirebaseToken(token: string): Promise<FirebaseIdentity | null> {
   if (token.startsWith("TEST_FIREBASE_TOKEN_FOR_")) {
-    const phoneNumber = token.replace("TEST_FIREBASE_TOKEN_FOR_", "");
-    return { phoneNumber };
+    const value = token.replace("TEST_FIREBASE_TOKEN_FOR_", "");
+    if (value.includes("@")) {
+      return { email: value, name: value.split("@")[0], emailVerified: true };
+    }
+    return { phoneNumber: value };
   }
 
   const initialized = initializeFirebase();
@@ -52,7 +65,12 @@ export async function verifyFirebaseToken(token: string): Promise<{ phoneNumber?
   try {
     const decodedToken = await getAuth().verifyIdToken(token);
     return {
+      uid: decodedToken.uid,
       phoneNumber: decodedToken.phone_number,
+      email: decodedToken.email,
+      name: (decodedToken.name as string | undefined) ?? undefined,
+      picture: decodedToken.picture,
+      emailVerified: decodedToken.email_verified,
     };
   } catch (error: any) {
     console.error("Firebase token verification error:", error);

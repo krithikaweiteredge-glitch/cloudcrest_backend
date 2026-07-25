@@ -97,7 +97,7 @@ export async function registerUser(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Registration error:", error);
     return res.status(500).json({
-      error: error.message || "Internal server error during registration",
+      error: "Internal server error during registration",
     });
   }
 }
@@ -186,7 +186,7 @@ export async function loginUser(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Login error:", error);
     return res.status(500).json({
-      error: error.message || "Internal server error during login",
+      error: "Internal server error during login",
     });
   }
 }

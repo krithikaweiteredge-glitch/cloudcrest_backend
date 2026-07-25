@@ -128,6 +128,6 @@ export async function generateInvoicePdf(req: AuthenticatedRequest, res: Respons
     doc.end();
   } catch (error: any) {
     console.error("PDF generation error:", error);
-    return res.status(500).json({ error: error.message || "Failed to generate PDF invoice" });
+    return res.status(500).json({ error: "Failed to generate PDF invoice" });
   }
 }

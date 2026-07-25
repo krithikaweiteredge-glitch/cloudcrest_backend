@@ -20,6 +20,10 @@ export const businesses = pgTable("businesses", {
   city: varchar("city", { length: 100 }),
   pincode: varchar("pincode", { length: 20 }),
   address: text("address"),
+  postalAddress: text("postal_address"),
+  directors: text("directors"),
+  aadhaar: varchar("aadhaar", { length: 20 }),
+  passport: varchar("passport", { length: 50 }),
   status: varchar("status", { length: 50 }).default("active"),
 });
 

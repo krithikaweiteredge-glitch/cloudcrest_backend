@@ -1,13 +1,16 @@
 import { Router } from "express";
-import { getMyNotifications, markNotificationAsRead } from "../controllers/notificationController.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { getNotifications, createNotification, markNotificationRead } from "../controllers/notificationController.js";
+import { optionalAuth } from "../middlewares/authMiddleware.js";
 
 const router = Router();
 
-// Secure all endpoints to logged-in customers
-router.use(authMiddleware as any);
+// Public & Authenticated Notifications (Guest mode gets broadcasts; Logged-in gets user-specific + broadcasts)
+router.get("/", optionalAuth, getNotifications);
 
-router.get("/my-notifications", getMyNotifications as any);
-router.put("/:id/read", markNotificationAsRead as any);
+// Create Notification (Admin / Internal)
+router.post("/", optionalAuth, createNotification);
+
+// Mark Read
+router.post("/:id/read", optionalAuth, markNotificationRead);
 
 export default router;

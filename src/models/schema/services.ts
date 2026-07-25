@@ -30,6 +30,22 @@ export const services = pgTable("services", {
   govtFee: decimal("govt_fee", { precision: 12, scale: 2 }).notNull(),
   gstPercent: decimal("gst_percent", { precision: 5, scale: 2 }).notNull(),
   active: boolean("active").default(true).notNull(),
+  // Customer-facing presentation. A service only appears in the customer sidebar
+  // once it has a slug (this keeps legacy seeded rows hidden).
+  slug: varchar("slug", { length: 255 }),
+  shortTitle: varchar("short_title", { length: 255 }),
+  authority: varchar("authority", { length: 255 }),
+  formNo: varchar("form_no", { length: 255 }),
+  icon: varchar("icon", { length: 60 }),
+  whoCanApply: text("who_can_apply"),
+  actsRules: text("acts_rules"),
+  validity: varchar("validity", { length: 255 }),
+  nswsApplied: boolean("nsws_applied").default(false),
+  actsRulesPdfs: text("acts_rules_pdfs"),
+  tabs: text("tabs"),
+  // JSON array of `{ label, amount }` the admin authored for this service. When
+  // empty the professional/govt/GST columns above drive the fee breakdown.
+  feeLines: text("fee_lines"),
 });
 
 export type Service = InferSelectModel<typeof services>;
@@ -55,6 +71,8 @@ export const serviceFields = pgTable("service_fields", {
   fieldType: varchar("field_type", { length: 100 }).notNull(),
   required: boolean("required").default(false).notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
+  stepName: varchar("step_name", { length: 255 }),
+  options: text("options"),
 });
 
 export type ServiceField = InferSelectModel<typeof serviceFields>;

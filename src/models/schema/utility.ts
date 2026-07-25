@@ -4,28 +4,7 @@ import { services } from "./services.js";
 import { users } from "./auth.js";
 import { orders } from "./orders.js";
 
-// 19. KNOWLEDGE CATEGORIES TABLE
-export const knowledgeCategories = pgTable("knowledge_categories", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-});
-
-export type KnowledgeCategory = InferSelectModel<typeof knowledgeCategories>;
-export type NewKnowledgeCategory = InferInsertModel<typeof knowledgeCategories>;
-
-// 20. KNOWLEDGE ARTICLES TABLE
-export const knowledgeArticles = pgTable("knowledge_articles", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  categoryId: bigint("category_id", { mode: "number" }).references(() => knowledgeCategories.id).notNull(),
-  serviceId: bigint("service_id", { mode: "number" }).references(() => services.id),
-  title: varchar("title", { length: 255 }).notNull(),
-  content: text("content").notNull(),
-});
-
-export type KnowledgeArticle = InferSelectModel<typeof knowledgeArticles>;
-export type NewKnowledgeArticle = InferInsertModel<typeof knowledgeArticles>;
-
-// 21. COMPLIANCE CALENDAR TABLE
+// COMPLIANCE CALENDAR TABLE
 export const complianceCalendar = pgTable("compliance_calendar", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   serviceId: bigint("service_id", { mode: "number" }).references(() => services.id),

@@ -2,6 +2,7 @@ import { Response } from "express";
 import { db } from "../config/db.js";
 import { businesses, orders, estimates, orderDocuments, documentTypes, services, orderFieldValues, serviceFields } from "../models/schema.js";
 import { AuthenticatedRequest } from "../middlewares/authMiddleware.js";
+import { saveUpload } from "../utils/storage.js";
 import { eq, and } from "drizzle-orm";
 
 export async function createOrder(req: AuthenticatedRequest, res: Response) {
@@ -132,7 +133,7 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("Order submission error:", error);
-    return res.status(500).json({ error: error.message || "Internal server error submitting order" });
+    return res.status(500).json({ error: "Internal server error submitting order" });
   }
 }
 
@@ -161,7 +162,7 @@ export async function getCustomerOrders(req: AuthenticatedRequest, res: Response
     return res.status(200).json(list);
   } catch (error: any) {
     console.error("Get customer orders error:", error);
-    return res.status(500).json({ error: error.message || "Failed to fetch orders" });
+    return res.status(500).json({ error: "Failed to fetch orders" });
   }
 }
 
@@ -219,7 +220,7 @@ export async function getCustomerOrderDetails(req: AuthenticatedRequest, res: Re
     });
   } catch (error: any) {
     console.error("Get order details error:", error);
-    return res.status(500).json({ error: error.message || "Failed to fetch order details" });
+    return res.status(500).json({ error: "Failed to fetch order details" });
   }
 }
 
@@ -253,7 +254,7 @@ export async function submitOrderPayment(req: AuthenticatedRequest, res: Respons
     return res.status(200).json({ message: "Payment processed successfully" });
   } catch (error: any) {
     console.error("Submit payment error:", error);
-    return res.status(500).json({ error: error.message || "Failed to submit payment" });
+    return res.status(500).json({ error: "Failed to submit payment" });
   }
 }
 
@@ -322,13 +323,14 @@ export async function uploadOrderDocuments(req: AuthenticatedRequest, res: Respo
         if (!isNaN(parsed)) docTypeId = parsed;
       }
 
+      const fileUrl = await saveUpload(f);
       const inserted = await db
         .insert(orderDocuments)
         .values({
           orderId: orderRecord.id,
           documentTypeId: docTypeId,
           fileName: f.originalname,
-          fileUrl: `uploads/${f.filename}`,
+          fileUrl,
           verificationStatus: "pending",
         })
         .returning();
@@ -342,6 +344,6 @@ export async function uploadOrderDocuments(req: AuthenticatedRequest, res: Respo
     });
   } catch (error: any) {
     console.error("Document upload error:", error);
-    return res.status(500).json({ error: error.message || "Failed to upload documents" });
+    return res.status(500).json({ error: "Failed to upload documents" });
   }
 }

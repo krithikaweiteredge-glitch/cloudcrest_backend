@@ -14,11 +14,14 @@ export const serviceRequests = pgTable("service_requests", {
   contactName: varchar("contact_name", { length: 255 }).notNull(),
   contactEmail: varchar("contact_email", { length: 255 }).notNull(),
   contactPhone: varchar("contact_phone", { length: 50 }).notNull(),
+  authorisedCapital: bigint("authorised_capital", { mode: "number" }),
+  paidCapital: bigint("paid_capital", { mode: "number" }),
   notes: text("notes"),
+  formData: text("form_data"),
   status: varchar("status", { length: 100 }).default("submitted").notNull(),
   referenceNo: varchar("reference_no", { length: 100 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
 
 export type ServiceRequest = InferSelectModel<typeof serviceRequests>;
@@ -33,6 +36,7 @@ export const requestDocuments = pgTable("request_documents", {
   sizeBytes: bigint("size_bytes", { mode: "number" }),
   storagePath: varchar("storage_path", { length: 1024 }).notNull(),
   mimeType: varchar("mime_type", { length: 255 }),
+  isVault: varchar("is_vault", { length: 50 }).default("false"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

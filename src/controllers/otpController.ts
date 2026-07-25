@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { db } from "../config/db.js";
-import { otps, users, roles } from "../models/schema.js";
+import { otps, users, roles, businesses } from "../models/schema.js";
 import { eq, and, gt } from "drizzle-orm";
 import { sendOtpEmail } from "../utils/email.js";
 import { createSessionToken } from "../utils/auth.js";
@@ -39,7 +39,7 @@ export async function sendOtp(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Send OTP error:", error);
     return res.status(500).json({
-      error: error.message || "Internal server error while sending OTP",
+      error: "Internal server error while sending OTP",
     });
   }
 }
@@ -91,49 +91,72 @@ export async function verifyOtp(req: Request, res: Response) {
       .where(eq(users.email, email))
       .limit(1);
 
-    let loggedInUser;
-    let isNewUser = false;
-
-    if (userList.length === 0) {
-      // Automatic sign-up: Create user record on first successful login
-      isNewUser = true;
-
-      // Get Customer role ID
-      const customerRole = await db
-        .select()
-        .from(roles)
-        .where(eq(roles.name, "Customer"))
-        .limit(1);
-      
-      const defaultRoleId = customerRole[0]?.id || 1;
-      const roleName = customerRole[0]?.name || "Customer";
-
-      const defaultFirstName = email.split("@")[0];
-
-      const newUsers = await db
-        .insert(users)
-        .values({
-          firstName: defaultFirstName,
-          email,
-          passwordHash: "OTP_VERIFIED_USER", // Placeholder for compatibility
-          roleId: defaultRoleId,
-          status: "active",
-        })
-        .returning();
-
-      const createdUser = newUsers[0];
-      loggedInUser = {
-        ...createdUser,
-        roleName,
-      };
-    } else {
-      loggedInUser = userList[0];
-    }
-
-    // Verify status is active
-    if (loggedInUser.status !== "active") {
+    // Reject a deactivated existing account before doing any writes. A brand-new
+    // account is always created active below, so this only concerns returning users.
+    if (userList.length > 0 && userList[0].status !== "active") {
       return res.status(403).json({ error: "This account has been deactivated" });
     }
+
+    const isNewUser = userList.length === 0;
+    const { isBusiness, companyName, pan, cin, address, gstin } = req.body;
+
+    // Create the account and, for business sign-ups, its company profile in a
+    // single transaction so a failure can never leave a user without the
+    // business row they signed up with (or vice versa).
+    const loggedInUser = await db.transaction(async (tx) => {
+      let account;
+
+      if (isNewUser) {
+        const customerRole = await tx
+          .select()
+          .from(roles)
+          .where(eq(roles.name, "Customer"))
+          .limit(1);
+        const defaultRoleId = customerRole[0]?.id || 1;
+        const roleName = customerRole[0]?.name || "Customer";
+
+        const [createdUser] = await tx
+          .insert(users)
+          .values({
+            firstName: email.split("@")[0],
+            email,
+            passwordHash: "OTP_VERIFIED_USER", // Placeholder for compatibility
+            roleId: defaultRoleId,
+            status: "active",
+          })
+          .returning();
+        account = { ...createdUser, roleName };
+      } else {
+        account = userList[0];
+      }
+
+      if (isBusiness) {
+        const existingBusinesses = await tx
+          .select()
+          .from(businesses)
+          .where(eq(businesses.customerId, account.id))
+          .limit(1);
+
+        const businessData = {
+          customerId: account.id,
+          businessName: (companyName || "").trim() || `${account.firstName}'s Business`,
+          legalName: (companyName || "").trim(),
+          pan: (pan || "").trim(),
+          cin: (cin || "").trim(),
+          address: (address || "").trim(),
+          gstin: (gstin || "").trim(),
+          status: "active",
+        };
+
+        if (existingBusinesses.length > 0) {
+          await tx.update(businesses).set(businessData).where(eq(businesses.id, existingBusinesses[0].id));
+        } else {
+          await tx.insert(businesses).values(businessData);
+        }
+      }
+
+      return account;
+    });
 
     // Sign session token
     const token = await createSessionToken({
@@ -170,7 +193,7 @@ export async function verifyOtp(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Verify OTP error:", error);
     return res.status(500).json({
-      error: error.message || "Internal server error during OTP verification",
+      error: "Internal server error during OTP verification",
     });
   }
 }
@@ -293,6 +316,120 @@ export async function firebaseLogin(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error("Firebase login error:", error);
-    return res.status(500).json({ error: error.message || "Failed to authenticate via Firebase token" });
+    return res.status(500).json({ error: "Failed to authenticate via Firebase token" });
+  }
+}
+
+// 4. GOOGLE SIGN-IN (Firebase Google provider -> app session)
+export async function googleLogin(req: Request, res: Response) {
+  try {
+    const { firebaseToken } = req.body;
+    if (!firebaseToken) {
+      return res.status(400).json({ error: "Firebase ID token is required" });
+    }
+
+    const payload = await verifyFirebaseToken(firebaseToken);
+    if (!payload || !payload.email) {
+      return res.status(400).json({ error: "Invalid or expired Google verification token" });
+    }
+
+    const email = payload.email.toLowerCase();
+
+    // Check if user already exists with this email
+    let userList = await db
+      .select({
+        id: users.id,
+        roleId: users.roleId,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        phone: users.phone,
+        status: users.status,
+        createdAt: users.createdAt,
+        roleName: roles.name,
+      })
+      .from(users)
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(users.email, email))
+      .limit(1);
+
+    let loggedInUser;
+    let isNewUser = false;
+
+    if (userList.length === 0) {
+      // Automatic sign-up on first Google login
+      isNewUser = true;
+
+      const customerRole = await db
+        .select()
+        .from(roles)
+        .where(eq(roles.name, "Customer"))
+        .limit(1);
+
+      const defaultRoleId = customerRole[0]?.id || 1;
+      const roleName = customerRole[0]?.name || "Customer";
+
+      const fullName = (payload.name || email.split("@")[0]).trim();
+      const nameParts = fullName.split(/\s+/);
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(" ") || null;
+
+      const newUsers = await db
+        .insert(users)
+        .values({
+          firstName,
+          lastName,
+          email,
+          passwordHash: "GOOGLE_VERIFIED_USER", // Placeholder; Google users don't use passwords
+          roleId: defaultRoleId,
+          status: "active",
+        })
+        .returning();
+
+      loggedInUser = {
+        ...newUsers[0],
+        roleName,
+      };
+    } else {
+      loggedInUser = userList[0];
+    }
+
+    if (loggedInUser.status !== "active") {
+      return res.status(403).json({ error: "This account has been deactivated" });
+    }
+
+    const token = await createSessionToken({
+      userId: loggedInUser.id,
+      email: loggedInUser.email,
+      roleId: loggedInUser.roleId,
+      roleName: loggedInUser.roleName || "Customer",
+    });
+
+    const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
+    res.cookie("auth_token", token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    });
+
+    return res.status(200).json({
+      message: isNewUser ? "Account created and logged in successfully" : "Logged in successfully",
+      user: {
+        id: loggedInUser.id,
+        firstName: loggedInUser.firstName,
+        lastName: loggedInUser.lastName,
+        email: loggedInUser.email,
+        phone: loggedInUser.phone,
+        roleId: loggedInUser.roleId,
+        roleName: loggedInUser.roleName || "Customer",
+        status: loggedInUser.status,
+        createdAt: loggedInUser.createdAt,
+      },
+    });
+  } catch (error: any) {
+    console.error("Google login error:", error);
+    return res.status(500).json({ error: "Failed to authenticate via Google" });
   }
 }

@@ -3,13 +3,9 @@ import bcrypt from "bcryptjs";
 import { db } from "../config/db.js";
 import { users, roles } from "../models/schema.js";
 import { eq } from "drizzle-orm";
-import * as dotenv from "dotenv";
+import { env } from "../config/env.js";
 
-dotenv.config();
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "super-secret-jwt-key-replace-this-in-production"
-);
+const JWT_SECRET = new TextEncoder().encode(env.jwtSecret);
 
 // Hashing Utilities
 export async function hashPassword(password: string): Promise<string> {

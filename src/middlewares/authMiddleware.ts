@@ -31,3 +31,16 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
     return res.status(500).json({ error: "Internal server error during authentication" });
   }
 }
+
+export async function optionalAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const cookiesHeader = req.headers.cookie || "";
+    const user = await getAuthenticatedUser(cookiesHeader);
+    if (user) {
+      req.user = user;
+    }
+    next();
+  } catch (error) {
+    next();
+  }
+}

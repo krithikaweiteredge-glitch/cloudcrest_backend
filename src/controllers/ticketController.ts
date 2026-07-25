@@ -41,7 +41,7 @@ export async function createTicket(req: AuthenticatedRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("Create ticket error:", error);
-    return res.status(500).json({ error: error.message || "Failed to create support ticket" });
+    return res.status(500).json({ error: "Failed to create support ticket" });
   }
 }
 
@@ -62,7 +62,7 @@ export async function getMyTickets(req: AuthenticatedRequest, res: Response) {
     return res.status(200).json(list);
   } catch (error: any) {
     console.error("List tickets error:", error);
-    return res.status(500).json({ error: error.message || "Failed to retrieve tickets" });
+    return res.status(500).json({ error: "Failed to retrieve tickets" });
   }
 }
 
@@ -114,61 +114,7 @@ export async function getTicketDetails(req: AuthenticatedRequest, res: Response)
     });
   } catch (error: any) {
     console.error("Get ticket details error:", error);
-    return res.status(500).json({ error: error.message || "Failed to fetch ticket conversation details" });
+    return res.status(500).json({ error: "Failed to fetch ticket conversation details" });
   }
 }
 
-// 4. CUSTOMER REPLIES TO A SUPPORT TICKET
-export async function replyToTicket(req: AuthenticatedRequest, res: Response) {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const ticketId = parseInt(req.params.id as string, 10);
-    if (isNaN(ticketId)) {
-      return res.status(400).json({ error: "Invalid ticket ID" });
-    }
-
-    const { message } = req.body;
-    if (!message || !message.trim()) {
-      return res.status(400).json({ error: "Message content cannot be blank" });
-    }
-
-    // Verify ownership
-    const ticketCheck = await db
-      .select()
-      .from(supportTickets)
-      .where(and(eq(supportTickets.id, ticketId), eq(supportTickets.customerId, userId)))
-      .limit(1);
-
-    if (ticketCheck.length === 0) {
-      return res.status(404).json({ error: "Ticket not found or access denied" });
-    }
-
-    // Add reply message
-    const [newMessage] = await db
-      .insert(ticketMessages)
-      .values({
-        ticketId,
-        senderId: userId,
-        message: message.trim(),
-      })
-      .returning();
-
-    // Reset status back to pending to notify admin of customer reply
-    await db
-      .update(supportTickets)
-      .set({ status: "pending" })
-      .where(eq(supportTickets.id, ticketId));
-
-    return res.status(201).json({
-      message: "Reply sent successfully",
-      reply: newMessage,
-    });
-  } catch (error: any) {
-    console.error("Reply to ticket error:", error);
-    return res.status(500).json({ error: error.message || "Failed to post reply" });
-  }
-}
