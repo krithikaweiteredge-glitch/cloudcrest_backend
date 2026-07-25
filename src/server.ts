@@ -20,11 +20,12 @@ app.use(
     origin: (origin, callback) => {
       // Same-origin / server-to-server requests have no Origin header.
       if (!origin) return callback(null, true);
+      const normalized = origin.replace(/\/+$/, "");
       // With no explicit allowlist (local dev), reflect localhost origins only.
       if (env.corsOrigins.length === 0) {
-        return callback(null, /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
+        return callback(null, /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized));
       }
-      return callback(null, env.corsOrigins.includes(origin));
+      return callback(null, env.corsOrigins.includes(normalized));
     },
     credentials: true,
   }),

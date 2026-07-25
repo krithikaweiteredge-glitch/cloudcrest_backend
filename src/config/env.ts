@@ -40,9 +40,10 @@ export const env = {
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: JWT_SECRET,
   // Comma-separated allowlist of browser origins. Empty in dev means "reflect any
-  // localhost origin"; in production it must be set explicitly.
+  // localhost origin"; in production it must be set explicitly. Trailing slashes
+  // are stripped so `https://app.com/` still matches the browser's `https://app.com`.
   corsOrigins: (process.env.CORS_ORIGINS || "")
     .split(",")
-    .map((o) => o.trim())
+    .map((o) => o.trim().replace(/\/+$/, ""))
     .filter(Boolean),
 };
