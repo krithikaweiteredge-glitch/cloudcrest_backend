@@ -316,6 +316,9 @@ export async function firebaseLogin(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error("Firebase login error:", error);
+    if (typeof error?.message === "string" && /Firebase Admin is not configured/i.test(error.message)) {
+      return res.status(503).json({ error: error.message });
+    }
     return res.status(500).json({ error: "Failed to authenticate via Firebase token" });
   }
 }
@@ -430,6 +433,11 @@ export async function googleLogin(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error("Google login error:", error);
+    // A misconfigured Firebase Admin SDK is a setup problem, not a secret — surface
+    // it so the deployer knows exactly what to fix.
+    if (typeof error?.message === "string" && /Firebase Admin is not configured/i.test(error.message)) {
+      return res.status(503).json({ error: error.message });
+    }
     return res.status(500).json({ error: "Failed to authenticate via Google" });
   }
 }

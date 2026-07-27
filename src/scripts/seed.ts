@@ -510,6 +510,15 @@ async function main() {
       console.log("Admin account already exists.");
     }
 
+    // Roles + admin are all this script seeds now — it is safe to run anytime.
+    // The service catalog is owned by `db:seed:catalog`; the legacy catalog below
+    // (no slugs) is intentionally NOT seeded, and the destructive table wipe is
+    // gated behind SEED_WIPE=true so a stray run can never delete production data.
+    if (process.env.SEED_WIPE !== "true") {
+      console.log("Roles & admin ensured. Skipping catalog wipe/seed (run db:seed:catalog for the catalog).");
+      return;
+    }
+
     // 4. Truncate all transaction and catalog tables to prevent foreign key errors
     console.log("Cleaning existing database tables...");
     await db.delete(notifications);

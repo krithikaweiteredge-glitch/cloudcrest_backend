@@ -23,6 +23,7 @@ import {
   updateOrderStatus,
   downloadUserDocument,
   sendNotificationToUser,
+  sendBroadcast,
   listAllNotifications,
   listAllTickets,
   getTicketDetailsAdmin,
@@ -58,6 +59,7 @@ router.put("/orders/:id/status", updateOrderStatus as any);
 router.get("/documents/:id/download", downloadUserDocument as any);
 router.get("/notifications", listAllNotifications as any);
 router.post("/notifications", validate(sendNotificationSchema), sendNotificationToUser as any);
+router.post("/broadcast", sendBroadcast as any);
 router.get("/tickets", listAllTickets as any);
 router.get("/tickets/:id", getTicketDetailsAdmin as any);
 router.put("/tickets/:id/status", updateTicketStatus as any);

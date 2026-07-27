@@ -598,30 +598,36 @@ export async function updateRequestStatus(req: AuthenticatedRequest, res: Respon
     // Audit Logging
     await logActivity(adminId, `Updated registration ID ${requestId} (${request.referenceNo}) status to ${targetStatus}`, "requests", requestId);
 
-    // Create notification for applicant
+    // Create notification for applicant. Best-effort only — the status change is
+    // already committed above, so a notification failure must NOT surface as a
+    // failed update (that made the UI show an error while the status had saved).
     if (request.userId || request.contactEmail) {
-      const statusTitleMap: Record<string, string> = {
-        processing: `Registration Processing: ${request.serviceTitle}`,
-        approved: `Registration Approved: ${request.serviceTitle}`,
-        rejected: `Registration Rejected: ${request.serviceTitle}`,
-        pending: `Registration Pending: ${request.serviceTitle}`,
-      };
+      try {
+        const statusTitleMap: Record<string, string> = {
+          processing: `Registration Processing: ${request.serviceTitle}`,
+          approved: `Registration Approved: ${request.serviceTitle}`,
+          rejected: `Registration Rejected: ${request.serviceTitle}`,
+          pending: `Registration Pending: ${request.serviceTitle}`,
+        };
 
-      const statusMsgMap: Record<string, string> = {
-        processing: `Your application (${request.referenceNo}) for ${request.serviceTitle} is now under active processing by our associates.`,
-        approved: `Great news! Your application (${request.referenceNo}) for ${request.serviceTitle} has been approved by the authority.`,
-        rejected: `Your application (${request.referenceNo}) for ${request.serviceTitle} has been marked as rejected. Please check advisor notes or contact support.`,
-        pending: `Your application (${request.referenceNo}) for ${request.serviceTitle} is currently pending review.`,
-      };
+        const statusMsgMap: Record<string, string> = {
+          processing: `Your application (${request.referenceNo}) for ${request.serviceTitle} is now under active processing by our associates.`,
+          approved: `Great news! Your application (${request.referenceNo}) for ${request.serviceTitle} has been approved by the authority.`,
+          rejected: `Your application (${request.referenceNo}) for ${request.serviceTitle} has been marked as rejected. Please check advisor notes or contact support.`,
+          pending: `Your application (${request.referenceNo}) for ${request.serviceTitle} is currently pending review.`,
+        };
 
-      await db.insert(notifications).values({
-        userId: request.userId ? Number(request.userId) : null,
-        title: statusTitleMap[targetStatus] || `Registration Status Updated: ${targetStatus}`,
-        message: statusMsgMap[targetStatus] || `Status for ${request.referenceNo} changed to ${targetStatus}.`,
-        type: "user_update",
-        linkUrl: `/profile/requests?ref=${request.referenceNo}`,
-        isRead: "false",
-      });
+        await db.insert(notifications).values({
+          userId: request.userId ? Number(request.userId) : null,
+          title: statusTitleMap[targetStatus] || `Registration Status Updated: ${targetStatus}`,
+          message: statusMsgMap[targetStatus] || `Status for ${request.referenceNo} changed to ${targetStatus}.`,
+          type: "user_update",
+          linkUrl: `/profile/requests?ref=${request.referenceNo}`,
+          isRead: "false",
+        });
+      } catch (notifyErr) {
+        console.error("Failed to create status-change notification (status update still succeeded):", notifyErr);
+      }
     }
 
     return res.status(200).json({

@@ -33,6 +33,8 @@ export async function createServiceRequest(req: AuthenticatedRequest, res: Respo
       directors,
       shareholders,
       partners,
+      fees,
+      total,
     } = req.body;
 
     if (!serviceSlug || !serviceTitle || !contactName || !contactEmail || !contactPhone) {
@@ -43,20 +45,40 @@ export async function createServiceRequest(req: AuthenticatedRequest, res: Respo
     const randStr = Math.random().toString(36).substring(2, 10).toUpperCase();
     const referenceNo = `CC-${randStr}`;
 
-    const storedFormData = formData
-      ? typeof formData === "string" ? formData : JSON.stringify(formData)
-      : JSON.stringify({
-          address,
-          city,
-          state,
-          pincode,
-          name1,
-          name2,
-          objects,
-          directors,
-          shareholders,
-          partners,
-        });
+    // Build the base form-data object, parsing whatever the client sent.
+    let baseFormData: Record<string, any>;
+    if (formData) {
+      if (typeof formData === "string") {
+        try {
+          baseFormData = JSON.parse(formData);
+        } catch (_) {
+          baseFormData = {};
+        }
+      } else {
+        baseFormData = { ...formData };
+      }
+    } else {
+      baseFormData = { address, city, state, pincode, name1, name2, objects, directors, shareholders, partners };
+    }
+
+    // Snapshot the exact fee breakdown the customer saw at submit time, so any
+    // summary reprinted later shows the real fees rather than a placeholder
+    // estimate. Kept as a snapshot on purpose — later catalog price changes must
+    // not rewrite an already-filed application's figures.
+    const feeLines = Array.isArray(fees)
+      ? fees
+          .filter((f: any) => f && typeof f.label === "string" && f.label.trim())
+          .map((f: any) => ({ label: f.label, amount: Number(f.amount) || 0 }))
+      : [];
+    if (feeLines.length > 0) {
+      baseFormData.fees = feeLines;
+      baseFormData.total =
+        total != null ? Number(total) : feeLines.reduce((sum, l) => sum + l.amount, 0);
+    } else if (total != null) {
+      baseFormData.total = Number(total);
+    }
+
+    const storedFormData = JSON.stringify(baseFormData);
 
     const insertValues = {
       userId,
@@ -115,8 +137,18 @@ export async function listServiceRequests(req: AuthenticatedRequest, res: Respon
           .from(requestDocuments)
           .where(eq(requestDocuments.requestId, item.id))
           .orderBy(desc(requestDocuments.createdAt));
+
+        // Surface the snapshotted fee total (stored inside formData) so the
+        // orders list shows the real amount rather than a placeholder.
+        let total: number | null = null;
+        try {
+          const fdObj = item.formData ? JSON.parse(item.formData) : null;
+          if (fdObj && fdObj.total != null) total = Number(fdObj.total);
+        } catch (_) {}
+
         return {
           ...item,
+          total,
           documents: docs,
         };
       })
@@ -553,16 +585,32 @@ export async function downloadRequestPdfSummaryById(req: AuthenticatedRequest, r
       y += 22;
     };
 
-    const profFee = 2499;
-    const mcaFee = 1000;
-    const dscFee = 1500;
-    const stampFee = 500;
-    const grandTotal = profFee + mcaFee + dscFee + stampFee;
+    // Prefer the real fee breakdown snapshotted on the request at submit time.
+    // Fall back to the standard estimate only for legacy requests filed before
+    // fees were captured.
+    const storedFees: { label: string; amount: number }[] = Array.isArray(fd.fees)
+      ? fd.fees
+          .filter((f: any) => f && typeof f.label === "string")
+          .map((f: any) => ({ label: String(f.label), amount: Number(f.amount) || 0 }))
+      : [];
 
-    drawTableVal("Professional CA/CS Fee", profFee);
-    drawTableVal("MCA Govt. Filing Fee", mcaFee);
-    drawTableVal("DSC Fee (Digital Signature Certificates)", dscFee);
-    drawTableVal("Stamp Duty (estimated for state)", stampFee);
+    let grandTotal: number;
+    if (storedFees.length > 0) {
+      storedFees.forEach((f) => drawTableVal(f.label, f.amount));
+      grandTotal =
+        fd.total != null ? Number(fd.total) : storedFees.reduce((sum, f) => sum + f.amount, 0);
+    } else {
+      const profFee = 2499;
+      const mcaFee = 1000;
+      const dscFee = 1500;
+      const stampFee = 500;
+      grandTotal = profFee + mcaFee + dscFee + stampFee;
+
+      drawTableVal("Professional CA/CS Fee", profFee);
+      drawTableVal("MCA Govt. Filing Fee", mcaFee);
+      drawTableVal("DSC Fee (Digital Signature Certificates)", dscFee);
+      drawTableVal("Stamp Duty (estimated for state)", stampFee);
+    }
 
     pdfDoc.strokeColor("#E2E8F0").lineWidth(1).moveTo(50, y).lineTo(550, y).stroke();
     y += 10;
