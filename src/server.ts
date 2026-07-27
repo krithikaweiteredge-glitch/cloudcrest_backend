@@ -46,6 +46,15 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "healthy" });
 });
 
+// Root welcome / status endpoint
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    message: "Cloudcrest Backend API Server is running",
+    health: "/health",
+    api: "/api",
+  });
+});
+
 // 404 + terminal error handler must come after all routes.
 app.use(notFoundHandler);
 app.use(errorHandler);
