@@ -13,7 +13,7 @@ async function seedDefaultPublicNotifications() {
     {
       userId: null,
       title: "📢 Announcement: MCA Portal Updates 2026",
-      message: "Central MCA SPICe+ Part A & B incorporation forms are fully active with automated fee calculation.",
+      message: "Central MCA Part A & B incorporation forms are fully active with automated fee calculation.",
       type: "broadcast",
       linkUrl: "/m/company",
       isRead: "false",

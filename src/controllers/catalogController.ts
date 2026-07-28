@@ -46,6 +46,7 @@ export async function getCatalog(_req: AuthenticatedRequest, res: Response) {
               authority: v.authority,
               formNo: v.formNo,
               icon: v.icon,
+              wizardRules: v.wizardRules,
             })),
         })),
     }));
@@ -182,7 +183,7 @@ function slugify(v: string): string {
 
 export async function createService(req: AuthenticatedRequest, res: Response) {
   try {
-    const { subcategoryId, name, description, professionalFee, govtFee, gstPercent, active, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, nswsApplied, actsRulesPdfs, tabs, feeLines } = req.body;
+    const { subcategoryId, name, description, professionalFee, govtFee, gstPercent, active, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
     const sid = parseInt(subcategoryId as string, 10);
     if (isNaN(sid) || !name || !name.trim()) return res.status(400).json({ error: "Subcategory and name required" });
 
@@ -214,6 +215,7 @@ export async function createService(req: AuthenticatedRequest, res: Response) {
         actsRulesPdfs: actsRulesPdfs?.trim() || null,
         tabs: tabs?.trim() || null,
         feeLines: feeLines?.trim() || null,
+        wizardRules: wizardRules?.trim() || null,
       })
       .returning();
     if (req.user?.id) await logActivity(req.user.id, `Created service "${row.name}"`, "catalog", row.id);
@@ -227,7 +229,7 @@ export async function updateService(req: AuthenticatedRequest, res: Response) {
   try {
     const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
-    const { name, description, professionalFee, govtFee, gstPercent, active, subcategoryId, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, nswsApplied, actsRulesPdfs, tabs, feeLines } = req.body;
+    const { name, description, professionalFee, govtFee, gstPercent, active, subcategoryId, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
 
     const patch: Record<string, any> = {};
     if (name !== undefined) patch.name = String(name).trim();
@@ -248,6 +250,7 @@ export async function updateService(req: AuthenticatedRequest, res: Response) {
     if (actsRulesPdfs !== undefined) patch.actsRulesPdfs = actsRulesPdfs?.trim() || null;
     if (tabs !== undefined) patch.tabs = tabs?.trim() || null;
     if (feeLines !== undefined) patch.feeLines = feeLines?.trim() || null;
+    if (wizardRules !== undefined) patch.wizardRules = wizardRules?.trim() || null;
     if (slug !== undefined) {
       const cleanSlug = slug && slug.trim() ? slugify(slug) : null;
       if (cleanSlug) {

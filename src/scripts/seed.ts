@@ -32,7 +32,7 @@ const CATALOG = [
         services: [
           {
             name: "Private Limited Company Registration",
-            description: "Incorporation of a Private Limited Company under MCA SPICe+",
+            description: "Incorporation of a Private Limited Company under MCA",
             professionalFee: "7500.00",
             govtFee: "2200.00",
             gstPercent: "18.00",
@@ -43,7 +43,7 @@ const CATALOG = [
               "NOC from Property Owner"
             ],
             form: {
-              name: "SPICe+ Part B",
+              name: "MCA Part B",
               fields: [
                 { label: "Proposed Company Name 1", key: "name1", type: "text", required: true, sortOrder: 1 },
                 { label: "Proposed Company Name 2", key: "name2", type: "text", required: false, sortOrder: 2 },

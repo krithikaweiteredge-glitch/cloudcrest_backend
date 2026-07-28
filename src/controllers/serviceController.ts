@@ -148,6 +148,50 @@ export async function getPublicCatalog(req: Request, res: Response) {
   }
 }
 
+/**
+ * Sibling services that live in the same subcategory as `:slug`, excluding the
+ * base row itself. The Company wizard uses this to build its entity-type picker
+ * from the catalog (`company-pvt`, `company-opc`, …) instead of a hardcoded
+ * list, so an admin adding/removing/renaming a variant changes the picker.
+ *
+ * Variants are seeded inactive (so they never appear in the customer sidebar),
+ * so `active` is intentionally NOT filtered here — the wizard needs every
+ * variant regardless. Only pricing is withheld; this list carries no fees.
+ */
+export async function getServiceFamily(req: Request, res: Response) {
+  try {
+    const slug = req.params.slug as string;
+    if (!slug) {
+      return res.status(400).json({ error: "Slug is required" });
+    }
+    const [base] = await db.select().from(services).where(eq(services.slug, slug)).limit(1);
+    if (!base) {
+      return res.status(404).json({ error: "Service not found" });
+    }
+    const rows = await db
+      .select({
+        slug: services.slug,
+        name: services.name,
+        shortTitle: services.shortTitle,
+        formNo: services.formNo,
+        icon: services.icon,
+        active: services.active,
+        wizardRules: services.wizardRules,
+      })
+      .from(services)
+      .where(eq(services.subcategoryId, base.subcategoryId))
+      .orderBy(asc(services.id));
+
+    // Drop the base row and anything without a slug (the slug is what the wizard
+    // uses to resolve per-variant pricing via `useCatalogService`).
+    const variants = rows.filter((r) => r.slug && r.slug !== slug);
+    return res.status(200).json({ variants });
+  } catch (error: any) {
+    console.error("Get service family error:", error);
+    return res.status(500).json({ error: "Failed to fetch service family" });
+  }
+}
+
 export async function getServiceBySlug(req: AuthenticatedRequest, res: Response) {
   try {
     const slug = req.params.slug as string;

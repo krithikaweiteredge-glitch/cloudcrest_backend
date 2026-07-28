@@ -46,6 +46,11 @@ export const services = pgTable("services", {
   // JSON array of `{ label, amount }` the admin authored for this service. When
   // empty the professional/govt/GST columns above drive the fee breakdown.
   feeLines: text("fee_lines"),
+  // JSON `{ suffix, minDirectors, minShareholders, requiresNominee, tags, popular }`
+  // for wizard-driven entity types (company-*/llp-*). Lets an admin set each type's
+  // legal name suffix and incorporation rules from the catalog instead of code.
+  // Null for every non-wizard service.
+  wizardRules: text("wizard_rules"),
 });
 
 export type Service = InferSelectModel<typeof services>;

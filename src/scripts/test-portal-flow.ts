@@ -345,7 +345,7 @@ async function run() {
     body: JSON.stringify({
       userId: registeredCustomer.id,
       title: "Company Filing Update",
-      message: "Your SPICe+ form Part A has been successfully uploaded to the MCA database.",
+      message: "Your MCA form Part A has been successfully uploaded to the MCA database.",
       orderId,
     }),
   });
