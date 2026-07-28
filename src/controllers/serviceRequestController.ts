@@ -624,9 +624,9 @@ export async function downloadRequestPdfSummaryById(req: AuthenticatedRequest, r
     pdfDoc.strokeColor("#1F4E78").lineWidth(1.5).moveTo(50, y).lineTo(550, y).stroke();
     y += 20;
 
-    // Section 4: Advisor Notes & Filing Instructions
+    // Section 4: the applicant's own "anything we should know?" remark
     if (request.notes) {
-      pdfDoc.fontSize(12).fillColor("#1F4E78").text("4. Advisor Notes & Filing Instructions", 50, y);
+      pdfDoc.fontSize(12).fillColor("#1F4E78").text("4. Note from Applicant", 50, y);
       y += 22;
       pdfDoc.fontSize(9).fillColor("#2D3748").text(request.notes, 50, y, { width: 500 });
       const notesHeight = pdfDoc.heightOfString(request.notes, { width: 500 });
