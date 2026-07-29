@@ -34,8 +34,14 @@ import {
   getRequestByIdAdmin,
   updateRequestStatus,
 } from "../controllers/adminController.js";
+import {
+  listEmployees,
+  createEmployee,
+  updateEmployeeStatus,
+} from "../controllers/employeeController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { adminMiddleware } from "../middlewares/adminMiddleware.js";
+import { staffMiddleware } from "../middlewares/staffMiddleware.js";
 import { upload } from "../middlewares/multer.js";
 import { validate } from "../middlewares/validate.js";
 import {
@@ -49,26 +55,39 @@ import {
 
 const router = Router();
 
-// Force both auth cookies checks and Admin role verifications on all endpoints
+// Every /admin endpoint requires a valid session…
 router.use(authMiddleware as any);
+
+// --- Staff-accessible (Admin + Coordinator) --------------------------------
+// Coordinators share the operations console: registrations, support tickets and
+// user notifications. These are declared before the admin-only guard below, so a
+// Coordinator's request is handled here and never reaches adminMiddleware.
+router.get("/notifications", staffMiddleware as any, listAllNotifications as any);
+router.post("/notifications", staffMiddleware as any, validate(sendNotificationSchema), sendNotificationToUser as any);
+router.post("/broadcast", staffMiddleware as any, sendBroadcast as any);
+router.get("/tickets", staffMiddleware as any, listAllTickets as any);
+router.get("/tickets/:id", staffMiddleware as any, getTicketDetailsAdmin as any);
+router.put("/tickets/:id/status", staffMiddleware as any, updateTicketStatus as any);
+router.post("/tickets/:id/messages", staffMiddleware as any, replyToTicketAdmin as any);
+router.get("/requests", staffMiddleware as any, listAllRequests as any);
+router.get("/requests/:id", staffMiddleware as any, getRequestByIdAdmin as any);
+router.put("/requests/:id/status", staffMiddleware as any, updateRequestStatus as any);
+
+// --- Admin-only ------------------------------------------------------------
+// Everything below is restricted to Admins: catalog management, employee
+// management, orders and audit logs.
 router.use(adminMiddleware as any);
 
 router.get("/users", listAllUsers as any);
 router.get("/orders", listAllOrders as any);
 router.put("/orders/:id/status", updateOrderStatus as any);
 router.get("/documents/:id/download", downloadUserDocument as any);
-router.get("/notifications", listAllNotifications as any);
-router.post("/notifications", validate(sendNotificationSchema), sendNotificationToUser as any);
-router.post("/broadcast", sendBroadcast as any);
-router.get("/tickets", listAllTickets as any);
-router.get("/tickets/:id", getTicketDetailsAdmin as any);
-router.put("/tickets/:id/status", updateTicketStatus as any);
-router.post("/tickets/:id/messages", replyToTicketAdmin as any);
 router.get("/activity-logs", listActivityLogs as any);
-// Registration (service request) routes
-router.get("/requests", listAllRequests as any);
-router.get("/requests/:id", getRequestByIdAdmin as any);
-router.put("/requests/:id/status", updateRequestStatus as any);
+
+// Employee (coordinator) management
+router.get("/employees", listEmployees as any);
+router.post("/employees", createEmployee as any);
+router.patch("/employees/:id/status", updateEmployeeStatus as any);
 
 // Admin catalog routes. The catalog panel addresses everything under
 // /catalog/*, so the whole tree — categories, subcategories, services,

@@ -15,6 +15,10 @@ async function seed() {
     await db.insert(roles).values({ name: "Customer" }).returning();
     console.log("✅ Customer role created");
   }
+  if (!roleNames.includes("Coordinator")) {
+    await db.insert(roles).values({ name: "Coordinator", description: "Operations coordinator (staff)" }).returning();
+    console.log("✅ Coordinator role created");
+  }
 
   // Get admin role id
   const adminRole = await db.select().from(roles).where(eq(roles.name, "Admin")).limit(1);
