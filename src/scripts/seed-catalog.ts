@@ -24,6 +24,7 @@ import {
   documentTypes,
 } from "../models/schema.js";
 import { eq } from "drizzle-orm";
+import { COMPANY_WIZARD_DEFAULTS } from "../config/companyWizardDefaults.js";
 
 type SeedService = {
   slug: string;
@@ -158,7 +159,7 @@ const CATALOG: SeedGroup[] = [
       companyService("company-public", "Public Limited Company", "Public Limited", "INC-32", 6499, 2500, 1000, 1500),
       companyService("company-opc", "One Person Company (OPC)", "OPC", "INC-32", 2499, 1000, 500, 1500),
       companyService("company-sec8", "Section 8 Company (Non-Profit)", "Section 8", "INC-12", 4499, 1500, 500, 1500),
-      companyService("company-guarantee", "Company Limited by Guarantee", "Guarantee Co.", "INC-32", 3499, 1200, 500, 1500),
+      companyService("company-guarantee", "Unlimited Company", "Unlimited Co.", "INC-32", 3499, 1200, 500, 1500),
       companyService("company-nidhi", "Nidhi Company", "Nidhi", "INC-32 · NDH-4", 8499, 3000, 1000, 1500),
       companyService("company-producer", "Producer Company", "Producer Co.", "INC-32", 6499, 2500, 1000, 1500),
       companyService("company-foreign", "Foreign Company (Branch / Liaison)", "Foreign Co.", "FC-1", 14999, 5000, 2000, 1500),
@@ -411,10 +412,17 @@ async function upsertService(subcategoryId: number, s: SeedService) {
 
   let serviceId: number;
   if (existing) {
+    // wizardRules is intentionally left out of `values`, so re-seeding never
+    // overwrites rules an admin has edited in the catalog.
     await db.update(services).set(values).where(eq(services.id, existing.id));
     serviceId = existing.id;
   } else {
-    const [created] = await db.insert(services).values(values).returning();
+    // On first insert, seed the company entity-type rules from the shared
+    // backend defaults so the values live in the DB (not the frontend).
+    const wizardRules = COMPANY_WIZARD_DEFAULTS[s.slug]
+      ? JSON.stringify(COMPANY_WIZARD_DEFAULTS[s.slug])
+      : null;
+    const [created] = await db.insert(services).values({ ...values, wizardRules }).returning();
     serviceId = created.id;
   }
 
