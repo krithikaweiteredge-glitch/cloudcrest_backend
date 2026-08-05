@@ -5,6 +5,8 @@ import { AuthenticatedRequest } from "../middlewares/authMiddleware.js";
 import { eq, and, desc, or, isNull } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import { saveUpload } from "../utils/storage.js";
+import { parseFeeContext } from "../config/statutoryFees.js";
+import { resolveRequestFees } from "./feesController.js";
 
 // 1. CREATE SERVICE REQUEST (SUBMIT FORM)
 export async function createServiceRequest(req: AuthenticatedRequest, res: Response) {
@@ -35,6 +37,10 @@ export async function createServiceRequest(req: AuthenticatedRequest, res: Respo
       partners,
       fees,
       total,
+      // Authoritative fee inputs. When present, the fee is recomputed server-side
+      // from these and the catalog price — the client-sent `fees`/`total` are
+      // ignored so a tampered client can't file a request with the wrong amount.
+      feeContext,
     } = req.body;
 
     if (!serviceSlug || !serviceTitle || !contactName || !contactEmail || !contactPhone) {
@@ -61,21 +67,30 @@ export async function createServiceRequest(req: AuthenticatedRequest, res: Respo
       baseFormData = { address, city, state, pincode, name1, name2, objects, directors, shareholders, partners };
     }
 
-    // Snapshot the exact fee breakdown the customer saw at submit time, so any
-    // summary reprinted later shows the real fees rather than a placeholder
-    // estimate. Kept as a snapshot on purpose — later catalog price changes must
-    // not rewrite an already-filed application's figures.
-    const feeLines = Array.isArray(fees)
-      ? fees
-          .filter((f: any) => f && typeof f.label === "string" && f.label.trim())
-          .map((f: any) => ({ label: f.label, amount: Number(f.amount) || 0 }))
-      : [];
-    if (feeLines.length > 0) {
-      baseFormData.fees = feeLines;
-      baseFormData.total =
-        total != null ? Number(total) : feeLines.reduce((sum, l) => sum + l.amount, 0);
-    } else if (total != null) {
-      baseFormData.total = Number(total);
+    // Fees are recomputed server-side from the authoritative fee context (never
+    // trusting the client's amounts) and snapshotted onto the request, so any
+    // summary reprinted later shows the real fees. The snapshot is deliberate —
+    // later catalog price changes must not rewrite an already-filed application.
+    const ctx = parseFeeContext(feeContext);
+    if (ctx) {
+      const computed = await resolveRequestFees(ctx);
+      baseFormData.fees = computed.lines;
+      baseFormData.total = computed.total;
+    } else {
+      // Non-wizard services (no fee context) still snapshot whatever breakdown
+      // they sent — those services price themselves via admin-authored fee lines.
+      const feeLines = Array.isArray(fees)
+        ? fees
+            .filter((f: any) => f && typeof f.label === "string" && f.label.trim())
+            .map((f: any) => ({ label: f.label, amount: Number(f.amount) || 0 }))
+        : [];
+      if (feeLines.length > 0) {
+        baseFormData.fees = feeLines;
+        baseFormData.total =
+          total != null ? Number(total) : feeLines.reduce((sum, l) => sum + l.amount, 0);
+      } else if (total != null) {
+        baseFormData.total = Number(total);
+      }
     }
 
     const storedFormData = JSON.stringify(baseFormData);
@@ -463,14 +478,6 @@ export async function generateSummaryPdf(req: AuthenticatedRequest, res: Respons
 
     y += 20;
     doc.strokeColor("#1F4E78").lineWidth(1.5).moveTo(50, y).lineTo(550, y).stroke();
-
-    // Notes / Disclaimer
-    y += 30;
-    doc.fontSize(8).fillColor("#718096").text("Disclaimer / Notes:", 50, y);
-    y += 15;
-    doc.text("1. This is an estimated summary of cost for incorporation based on user provided data inputs.", 50, y);
-    y += 12;
-    doc.text("2. Official stamp duties and government fees are subject to state changes and actual capital allocations.", 50, y);
 
     // Footer Info
     doc.fontSize(8).fillColor("#A0AEC0").text("Cloudcrest Business Management Private Limited · Compliance & Incorporation Desk", 50, 750, { align: "center" });

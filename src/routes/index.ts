@@ -8,6 +8,7 @@ import notificationRoutes from "./notificationRoutes.js";
 import ticketRoutes from "./ticketRoutes.js";
 import profileRoutes from "./profileRoutes.js";
 import requestRoutes from "./requestRoutes.js";
+import feesRoutes from "./feesRoutes.js";
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.use("/notifications", notificationRoutes);
 router.use("/tickets", ticketRoutes);
 router.use("/profiles", profileRoutes);
 router.use("/requests", requestRoutes);
+router.use("/fees", feesRoutes);
 
 export default router;
 
