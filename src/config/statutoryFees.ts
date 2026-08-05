@@ -237,9 +237,14 @@ export type CombinedFees = {
 export function withProfessionalAndGst(
   professional: number,
   statutory: StatutoryLine[],
+  customLines?: StatutoryLine[],
 ): CombinedFees {
   const lines: StatutoryLine[] = [];
-  if (professional > 0) lines.push({ label: "Professional Fee", amount: professional });
+  if (customLines && customLines.length > 0) {
+    lines.push(...customLines.filter((l) => l.label && l.amount > 0));
+  } else if (professional > 0) {
+    lines.push({ label: "Professional Fee", amount: professional });
+  }
   lines.push(...statutory);
   const preGst = lines.reduce((s, l) => s + l.amount, 0);
   const gst = Math.round((preGst * GST_RATE) / 100);
@@ -292,10 +297,14 @@ export function deriveOpcSmall(ctx: CompanyFeeContext): boolean {
 }
 
 /** Compute the full customer-facing fee stack for a fee context. */
-export function computeFees(ctx: FeeContext, professionalFee: number): ComputedFees {
+export function computeFees(
+  ctx: FeeContext,
+  professionalFee: number,
+  customLines?: StatutoryLine[],
+): ComputedFees {
   if (ctx.kind === "llp") {
     const s = computeLlpStatutoryFees(ctx.contribution);
-    return { ...withProfessionalAndGst(professionalFee, s.lines), stateKnown: true };
+    return { ...withProfessionalAndGst(professionalFee, s.lines, customLines), stateKnown: true };
   }
   const opcSmall = deriveOpcSmall(ctx);
   const s = computeMcaStatutoryFees({
@@ -307,7 +316,7 @@ export function computeFees(ctx: FeeContext, professionalFee: number): ComputedF
     state: ctx.state,
   });
   return {
-    ...withProfessionalAndGst(professionalFee, s.lines),
+    ...withProfessionalAndGst(professionalFee, s.lines, customLines),
     stateKnown: s.stateKnown,
     smallCompany: opcSmall,
   };

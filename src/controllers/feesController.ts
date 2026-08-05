@@ -24,17 +24,32 @@ export function slugsForContext(ctx: FeeContext): string[] {
  */
 export async function professionalFeeForSlugs(
   slugs: string[],
-): Promise<{ fee: number; fromCatalog: boolean }> {
+): Promise<{ fee: number; customLines?: { label: string; amount: number }[]; fromCatalog: boolean }> {
   for (const slug of slugs) {
     if (!slug) continue;
     const [row] = await db
-      .select({ professionalFee: services.professionalFee })
+      .select({ professionalFee: services.professionalFee, feeLines: services.feeLines })
       .from(services)
       .where(eq(services.slug, slug))
       .limit(1);
     if (row && row.professionalFee != null) {
       const n = Number(row.professionalFee);
-      if (Number.isFinite(n)) return { fee: n, fromCatalog: true };
+      if (Number.isFinite(n)) {
+        let customLines: { label: string; amount: number }[] | undefined;
+        if (row.feeLines) {
+          try {
+            const parsed = JSON.parse(row.feeLines);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              customLines = parsed
+                .filter((l: any) => l.label && String(l.label).trim())
+                .map((l: any) => ({ label: String(l.label).trim(), amount: Number(l.amount) || 0 }));
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        return { fee: n, customLines, fromCatalog: true };
+      }
     }
   }
   return { fee: 0, fromCatalog: false };
@@ -48,8 +63,8 @@ export async function professionalFeeForSlugs(
 export async function resolveRequestFees(
   ctx: FeeContext,
 ): Promise<ComputedFees & { fromCatalog: boolean }> {
-  const { fee, fromCatalog } = await professionalFeeForSlugs(slugsForContext(ctx));
-  return { ...computeFees(ctx, fee), fromCatalog };
+  const { fee, customLines, fromCatalog } = await professionalFeeForSlugs(slugsForContext(ctx));
+  return { ...computeFees(ctx, fee, customLines), fromCatalog };
 }
 
 /**
