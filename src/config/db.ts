@@ -4,6 +4,10 @@ import { env } from "./env.js";
 
 const connectionString = env.databaseUrl;
 const isLocal = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+// Explicit override for a self-hosted Postgres reached by Docker service name
+// (e.g. `@postgres:5432`), which isn't "localhost" but still speaks plain TCP.
+// Set DATABASE_SSL=false to force TLS off; otherwise behaviour is unchanged.
+const disableSsl = process.env.DATABASE_SSL === "false" || isLocal;
 
 // Create connection pool.
 //
@@ -22,8 +26,8 @@ export const pool = new pg.Pool({
   // Managed Postgres (Neon/Supabase) requires TLS; local doesn't. rejectUnauthorized
   // stays false only because these providers use certs the default bundle may not
   // carry — the connection is still encrypted.
-  ssl: isLocal ? false : { rejectUnauthorized: false },
-  ...(isLocal
+  ssl: disableSsl ? false : { rejectUnauthorized: false },
+  ...(disableSsl
     ? {}
     : {
         max: 10,
