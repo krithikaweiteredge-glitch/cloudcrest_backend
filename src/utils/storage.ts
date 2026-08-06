@@ -51,7 +51,10 @@ export async function saveUpload(file: UploadFile): Promise<string> {
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY as string,
       },
     });
-    const key = `uploads/${safeName}`;
+    // Store at the bucket root (no `uploads/` prefix) so files show directly in
+    // Tower's Objects browser, which doesn't list keys nested under a prefix.
+    // The random suffix in safeName keeps the key unguessable.
+    const key = safeName;
     // No per-object ACL: many S3-compatible providers (incl. Tower) reject the
     // `x-amz-acl` header and control public access at the bucket level instead.
     try {
