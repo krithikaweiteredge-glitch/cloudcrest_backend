@@ -55,8 +55,9 @@ export async function saveUpload(file: UploadFile): Promise<string> {
     // Tower's Objects browser, which doesn't list keys nested under a prefix.
     // The random suffix in safeName keeps the key unguessable.
     const key = safeName;
-    // No per-object ACL: many S3-compatible providers (incl. Tower) reject the
-    // `x-amz-acl` header and control public access at the bucket level instead.
+    // Tower supports per-object `public-read` ACL; it's required so the stored
+    // public URL is actually viewable by the browser/app (matches Vercel Blob's
+    // public-URL behaviour). Without it, GETs return AccessDenied.
     try {
       await client.send(
         new PutObjectCommand({
@@ -64,6 +65,7 @@ export async function saveUpload(file: UploadFile): Promise<string> {
           Key: key,
           Body: file.buffer,
           ContentType: file.mimetype,
+          ACL: "public-read",
         }),
       );
     } catch (err) {
