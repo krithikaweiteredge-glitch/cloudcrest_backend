@@ -6,7 +6,7 @@ import { hashPassword } from "./src/utils/auth.js";
 async function seed() {
   // Ensure roles exist
   const existingRoles = await db.select().from(roles);
-  const roleNames = existingRoles.map(r => r.name);
+  const roleNames = existingRoles.map((r) => r.name);
   if (!roleNames.includes("Admin")) {
     await db.insert(roles).values({ name: "Admin" }).returning();
     console.log("✅ Admin role created");
@@ -26,10 +26,14 @@ async function seed() {
     throw new Error("Admin role not found after creation");
   }
 
-  const adminEmail = "admin@cloudcrest.com";
-  const adminExists = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1);
-  if (adminExists.length === 0) {
-    const passwordHash = await hashPassword("admin123"); // default password – change as needed
+  // Credentials come from the environment so the password never lives in the repo.
+  // Defaults preserve the historical local-dev behaviour.
+  const adminEmail = (process.env.ADMIN_EMAIL || "admin@cloudcrest.com").trim();
+  const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+  const passwordHash = await hashPassword(adminPassword);
+
+  const existing = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1);
+  if (existing.length === 0) {
     await db.insert(users).values({
       firstName: "Admin",
       lastName: "User",
@@ -39,13 +43,20 @@ async function seed() {
       roleId: adminRole[0].id,
       status: "active",
     }).returning();
-    console.log("✅ Admin user created (email: admin@cloudcrest.com, password: admin123)");
+    console.log(`✅ Admin user created (email: ${adminEmail})`);
   } else {
-    console.log("✅ Admin user already exists");
+    // Re-running rotates the password and re-asserts an active Admin account,
+    // instead of silently no-op'ing when the user already exists.
+    await db
+      .update(users)
+      .set({ passwordHash, roleId: adminRole[0].id, status: "active" })
+      .where(eq(users.email, adminEmail));
+    console.log(`✅ Admin user updated (email: ${adminEmail}) — password reset`);
   }
+  process.exit(0);
 }
 
-seed().catch(err => {
+seed().catch((err) => {
   console.error("⚠️ Seeding failed:", err);
   process.exit(1);
 });
