@@ -52,18 +52,26 @@ export async function saveUpload(file: UploadFile): Promise<string> {
       },
     });
     const key = `uploads/${safeName}`;
-    await client.send(
-      new PutObjectCommand({
-        Bucket: s3Bucket,
-        Key: key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-        ACL: "public-read",
-      }),
-    );
-    // Public, path-style URL. Requires the bucket/objects to be publicly readable.
+    // No per-object ACL: many S3-compatible providers (incl. Tower) reject the
+    // `x-amz-acl` header and control public access at the bucket level instead.
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: s3Bucket,
+          Key: key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }),
+      );
+    } catch (err) {
+      console.error(`[storage] Tower/S3 upload FAILED for "${key}":`, err);
+      throw err;
+    }
+    // Public, path-style URL. Requires the bucket to be publicly readable.
     const base = (s3Endpoint || "").replace(/\/+$/, "");
-    return `${base}/${s3Bucket}/${key}`;
+    const url = `${base}/${s3Bucket}/${key}`;
+    console.log(`[storage] uploaded to Tower/S3: ${url}`);
+    return url;
   }
 
   if (useBlob) {
