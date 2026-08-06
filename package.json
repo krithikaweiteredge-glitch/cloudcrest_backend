@@ -8,6 +8,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/scripts/seed.ts",
+    "db:seed:admin": "tsx seed-admin.ts",
     "db:seed:catalog": "tsx src/scripts/seed-catalog.ts",
     "db:fix-notifications": "tsx src/scripts/align-notifications.ts",
     "db:studio": "drizzle-kit studio"

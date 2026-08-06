@@ -15,6 +15,13 @@
       "when": 1785219615510,
       "tag": "0001_add_wizard_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0002_fix_notifications",
+      "breakpoints": true
     }
   ]
 }
