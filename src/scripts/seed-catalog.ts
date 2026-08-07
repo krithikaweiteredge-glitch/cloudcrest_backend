@@ -191,6 +191,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "A registered partnership firm is registered with the Registrar of Firms under the Indian Partnership Act, 1932. Registration gives the firm legal standing to enforce contractual rights in court.",
         whoCanApply: "• Two or more persons carrying on business and sharing profits.\n• Firms needing legal enforceability and credibility.\n• Partners competent to contract.",
+        wizardRules: JSON.stringify({ tags: ["ROF Registered", "Legal Standing"], popular: true }),
       },
       {
         ...svc("partnership-unregistered", "Unregistered Partnership Firm", "Unregistered", "Partnership Deed", "Deed", "Users", [
@@ -204,6 +205,8 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "An unregistered partnership firm is created by executing a partnership deed but is not filed with the Registrar of Firms. It is quick and low-cost to set up.",
         whoCanApply: "• Two or more persons wanting a quick, low-cost structure.\n• Firms that plan to register with the Registrar of Firms later.",
+        wizardRules: JSON.stringify({ tags: ["Deed Only", "Quick Setup"] }),
+      },
       svc("huf", "HUF", "HUF", "Income Tax", "HUF Deed", "HomeIcon", [
         "PAN of Karta",
         "Aadhaar of Karta and coparceners",
@@ -238,6 +241,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "Standard GST registration for businesses crossing the turnover threshold (₹40L goods / ₹20L services). Allows collecting tax and claiming Input Tax Credit.",
         whoCanApply: "• Turnover crossing ₹40 lakh (goods) or ₹20 lakh (services).\n• Anyone making regular inter-state or intra-state taxable supplies.",
+        wizardRules: JSON.stringify({ tags: ["Most common", "Full ITC"], popular: true }),
       },
       {
         ...svc("gst-composition", "Composition Scheme", "Composition", "GSTN", "REG-01 · CMP-02", "Wallet", [
@@ -250,6 +254,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "A flat-rate scheme for small taxpayers (turnover ≤ ₹1.5 crore) with simplified quarterly compliance.",
         whoCanApply: "• Turnover up to ₹1.5 crore (₹75 lakh for special states).\n• Pay tax at flat rate (cannot collect GST or claim ITC).",
+        wizardRules: JSON.stringify({ tags: ["Flat rate", "Turnover ≤ ₹1.5 Cr"] }),
       },
       {
         ...svc("gst-voluntary", "Voluntary Registration", "Voluntary", "GSTN", "REG-01", "Wallet", [
@@ -262,6 +267,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "Opt-in registration for businesses below the turnover threshold to claim ITC and sell B2B or inter-state.",
         whoCanApply: "• Businesses below threshold wanting Input Tax Credit.\n• Suppliers needing a GSTIN for B2B sales or e-commerce.",
+        wizardRules: JSON.stringify({ tags: ["Optional", "Claim ITC"] }),
       },
       {
         ...svc("gst-casual", "Casual Taxable Person (CTP)", "CTP", "GSTN", "REG-01", "Wallet", [
@@ -274,6 +280,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "For occasional supplies in a state where you have no fixed place of business (e.g. trade fair, exhibition).",
         whoCanApply: "• Occasional suppliers at exhibitions or seasonal stalls.\n• Advance tax deposit required for registration period (up to 90 days).",
+        wizardRules: JSON.stringify({ tags: ["Occasional", "Advance tax"] }),
       },
       {
         ...svc("gst-nrtp", "Non-Resident Taxable Person (NRTP)", "NRTP", "GSTN", "REG-09", "Globe", [
@@ -285,6 +292,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "For foreign residents occasionally supplying goods or services in India without a fixed office.",
         whoCanApply: "• Foreign residents supplying goods or services in India.\n• Apply on Form REG-09 with advance tax deposit.",
+        wizardRules: JSON.stringify({ tags: ["Foreign", "Advance tax"] }),
       },
       {
         ...svc("gst-isd", "Input Service Distributor (ISD)", "ISD", "GSTN", "REG-01", "Share2", [
@@ -296,6 +304,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "For head offices distributing input tax credit for common input services to branch units.",
         whoCanApply: "• Multi-unit businesses distributing common input service tax credits.",
+        wizardRules: JSON.stringify({ tags: ["Credit distribution"] }),
       },
       {
         ...svc("gst-ecom", "E-Commerce Operator", "E-Commerce", "GSTN", "REG-01", "ShoppingCart", [
@@ -307,6 +316,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "Mandatory GST registration for e-commerce platform operators facilitating third-party supplies.",
         whoCanApply: "• Platform operators facilitating supplies between sellers and buyers.\n• Required to collect TCS under GST.",
+        wizardRules: JSON.stringify({ tags: ["TCS", "Mandatory"] }),
       },
       {
         ...svc("gst-tds_tcs", "TDS / TCS Deductor", "TDS / TCS", "GSTN", "REG-07", "FileText", [
@@ -317,6 +327,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "For notified government bodies, local authorities, or specified deductors deducting TDS under GST.",
         whoCanApply: "• Government departments & notified deductors deducting GST TDS on Form REG-07.",
+        wizardRules: JSON.stringify({ tags: ["Deduct / Collect", "TAN"] }),
       },
       {
         ...svc("gst-other", "Special / Other GST Registration", "Special / SEZ", "GSTN", "REG-01", "Shield", [
@@ -327,6 +338,7 @@ const CATALOG: SeedGroup[] = [
         active: false,
         description: "For SEZ units, developers, OIDAR service providers, and UN/embassy Unique Identity Number (UIN) applicants.",
         whoCanApply: "• SEZ developers, SEZ units, OIDAR providers, and foreign embassy UIN applicants.",
+        wizardRules: JSON.stringify({ tags: ["SEZ / Special"] }),
       },
       svc("pan-tan", "PAN & TAN", "PAN / TAN", "Income Tax / NSDL", "49A / 49B", "IdCard", [
         "Identity proof (Aadhaar / Passport)",
