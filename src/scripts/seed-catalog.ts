@@ -34,6 +34,7 @@ type SeedService = {
   formNo: string;
   icon: string;
   description?: string;
+  whoCanApply?: string;
   professionalFee: number;
   govtFee: number;
   gstPercent: number;
@@ -68,11 +69,7 @@ const companyService = (
   slug: string,
   name: string,
   shortTitle: string,
-  formNo: string,
-  professional: number,
-  mca: number,
-  stamp: number,
-  dsc: number
+  formNo: string
 ): SeedService => ({
   slug,
   name,
@@ -80,9 +77,9 @@ const companyService = (
   authority: "MCA",
   formNo,
   icon: "Building2",
-  professionalFee: professional + dsc,
-  govtFee: mca + stamp,
-  gstPercent: 0,
+  professionalFee: 0,
+  govtFee: 0,
+  gstPercent: 18,
   documents: COMPANY_DOCS,
   active: slug === "company",
 });
@@ -102,10 +99,7 @@ const llpService = (
   slug: string,
   name: string,
   shortTitle: string,
-  formNo: string,
-  professional: number,
-  mca: number,
-  stamp: number
+  formNo: string
 ): SeedService => ({
   slug,
   name,
@@ -113,10 +107,9 @@ const llpService = (
   authority: "MCA",
   formNo,
   icon: "Handshake",
-  // LLP DSC was a flat ₹1,500 for 2 designated partners.
-  professionalFee: professional + 1500,
-  govtFee: mca + stamp,
-  gstPercent: 0,
+  professionalFee: 0,
+  govtFee: 0,
+  gstPercent: 18,
   documents: LLP_DOCS,
   active: slug === "llp",
 });
@@ -154,15 +147,14 @@ const CATALOG: SeedGroup[] = [
     category: "Entity Registration",
     subcategory: "Company Registration",
     services: [
-      companyService("company", "Company Registration", "Company", "INC-32", 2499, 1000, 500, 1500),
-      companyService("company-pvt", "Private Limited Company", "Private Limited", "INC-32", 2499, 1000, 500, 1500),
-      companyService("company-public", "Public Limited Company", "Public Limited", "INC-32", 6499, 2500, 1000, 1500),
-      companyService("company-opc", "One Person Company (OPC)", "OPC", "INC-32", 2499, 1000, 500, 1500),
-      companyService("company-sec8", "Section 8 Company (Non-Profit)", "Section 8", "INC-12", 4499, 1500, 500, 1500),
-      companyService("company-guarantee", "Unlimited Company", "Unlimited Co.", "INC-32", 3499, 1200, 500, 1500),
-      companyService("company-nidhi", "Nidhi Company", "Nidhi", "INC-32 · NDH-4", 8499, 3000, 1000, 1500),
-      companyService("company-producer", "Producer Company", "Producer Co.", "INC-32", 6499, 2500, 1000, 1500),
-      companyService("company-foreign", "Foreign Company (Branch / Liaison)", "Foreign Co.", "FC-1", 14999, 5000, 2000, 1500),
+      companyService("company", "Company Registration", "Company", "INC-32"),
+      companyService("company-pvt", "Private Limited Company", "Private Limited", "INC-32"),
+      companyService("company-public", "Public Limited Company", "Public Limited", "INC-32"),
+      companyService("company-opc", "One Person Company (OPC)", "OPC", "INC-32"),
+      companyService("company-sec8", "Section 8 Company (Non-Profit)", "Section 8", "INC-12"),
+      companyService("company-guarantee", "Unlimited Company", "Unlimited Co.", "INC-32"),
+      companyService("company-nidhi", "Nidhi Company", "Nidhi", "INC-32 · NDH-4"),
+      companyService("company-producer", "Producer Company", "Producer Co.", "INC-32"),
     ],
   },
   {
@@ -171,7 +163,7 @@ const CATALOG: SeedGroup[] = [
     // The LLP wizard has no entity-type step — every application is a standard
     // LLP — so there is a single row here, unlike Company.
     services: [
-      llpService("llp", "LLP Registration", "LLP", "FiLLiP", 1999, 500, 500),
+      llpService("llp", "LLP Registration", "LLP", "FiLLiP"),
     ],
   },
   {
@@ -185,13 +177,33 @@ const CATALOG: SeedGroup[] = [
         "Address proof of firm",
         "Rent agreement / ownership proof",
       ]),
-      svc("trust-society", "Trust & Societies", "Trust / Society", "Charity Commissioner", "Trust Deed / Form A", "Shield", [
-        "Trust deed / MoA",
-        "PAN & Aadhaar of trustees / members",
-        "Address proof of office",
-        "Photographs of trustees",
-        "Registered office NOC",
-      ]),
+      {
+        ...svc("partnership-registered", "Registered Partnership Firm", "Registered", "Registrar of Firms", "Form 1", "Users", [
+          "PAN of all partners",
+          "Aadhaar of partners",
+          "Passport-size photographs of all partners",
+          "Partnership deed executed on stamp paper",
+          "Proof of principal place of business",
+          "Bank account proof",
+          "Form 1 application to Registrar of Firms",
+          "Affidavit / statement signed by all partners",
+        ]),
+        active: false,
+        description: "A registered partnership firm is registered with the Registrar of Firms under the Indian Partnership Act, 1932. Registration gives the firm legal standing to enforce contractual rights in court.",
+        whoCanApply: "• Two or more persons carrying on business and sharing profits.\n• Firms needing legal enforceability and credibility.\n• Partners competent to contract.",
+      },
+      {
+        ...svc("partnership-unregistered", "Unregistered Partnership Firm", "Unregistered", "Partnership Deed", "Deed", "Users", [
+          "PAN of all partners",
+          "Aadhaar of partners",
+          "Passport-size photographs of all partners",
+          "Notarised partnership deed",
+          "Proof of principal place of business",
+          "Bank account proof",
+        ]),
+        active: false,
+        description: "An unregistered partnership firm is created by executing a partnership deed but is not filed with the Registrar of Firms. It is quick and low-cost to set up.",
+        whoCanApply: "• Two or more persons wanting a quick, low-cost structure.\n• Firms that plan to register with the Registrar of Firms later.",
       svc("huf", "HUF", "HUF", "Income Tax", "HUF Deed", "HomeIcon", [
         "PAN of Karta",
         "Aadhaar of Karta and coparceners",
@@ -213,6 +225,109 @@ const CATALOG: SeedGroup[] = [
         "Board resolution (companies)",
         "Digital Signature (DSC)",
       ]),
+      {
+        ...svc("gst-regular", "Normal / Regular Taxpayer", "Regular", "GSTN", "REG-01", "Wallet", [
+          "PAN of business",
+          "Aadhaar of proprietor / partners / directors",
+          "Passport-size photograph of authorised signatory",
+          "Proof of principal place of business",
+          "Bank account proof",
+          "Authorisation letter / board resolution",
+          "Proof of business constitution",
+        ]),
+        active: false,
+        description: "Standard GST registration for businesses crossing the turnover threshold (₹40L goods / ₹20L services). Allows collecting tax and claiming Input Tax Credit.",
+        whoCanApply: "• Turnover crossing ₹40 lakh (goods) or ₹20 lakh (services).\n• Anyone making regular inter-state or intra-state taxable supplies.",
+      },
+      {
+        ...svc("gst-composition", "Composition Scheme", "Composition", "GSTN", "REG-01 · CMP-02", "Wallet", [
+          "PAN of business",
+          "Aadhaar of proprietor / partners",
+          "Proof of principal place of business",
+          "Bank account proof",
+          "Form CMP-02 opt-in declaration",
+        ]),
+        active: false,
+        description: "A flat-rate scheme for small taxpayers (turnover ≤ ₹1.5 crore) with simplified quarterly compliance.",
+        whoCanApply: "• Turnover up to ₹1.5 crore (₹75 lakh for special states).\n• Pay tax at flat rate (cannot collect GST or claim ITC).",
+      },
+      {
+        ...svc("gst-voluntary", "Voluntary Registration", "Voluntary", "GSTN", "REG-01", "Wallet", [
+          "PAN of business",
+          "Aadhaar of proprietor / partners / directors",
+          "Proof of principal place of business",
+          "Bank account proof",
+          "Proof of business constitution",
+        ]),
+        active: false,
+        description: "Opt-in registration for businesses below the turnover threshold to claim ITC and sell B2B or inter-state.",
+        whoCanApply: "• Businesses below threshold wanting Input Tax Credit.\n• Suppliers needing a GSTIN for B2B sales or e-commerce.",
+      },
+      {
+        ...svc("gst-casual", "Casual Taxable Person (CTP)", "CTP", "GSTN", "REG-01", "Wallet", [
+          "PAN of business",
+          "Aadhaar of signatory",
+          "Proof of temporary place of business",
+          "Estimated turnover & tax liability details",
+          "Advance tax deposit challan",
+        ]),
+        active: false,
+        description: "For occasional supplies in a state where you have no fixed place of business (e.g. trade fair, exhibition).",
+        whoCanApply: "• Occasional suppliers at exhibitions or seasonal stalls.\n• Advance tax deposit required for registration period (up to 90 days).",
+      },
+      {
+        ...svc("gst-nrtp", "Non-Resident Taxable Person (NRTP)", "NRTP", "GSTN", "REG-09", "Globe", [
+          "Non-resident passport / tax ID",
+          "Authorised signatory PAN (Indian resident)",
+          "Advance tax deposit challan",
+          "Proof of business outside India",
+        ]),
+        active: false,
+        description: "For foreign residents occasionally supplying goods or services in India without a fixed office.",
+        whoCanApply: "• Foreign residents supplying goods or services in India.\n• Apply on Form REG-09 with advance tax deposit.",
+      },
+      {
+        ...svc("gst-isd", "Input Service Distributor (ISD)", "ISD", "GSTN", "REG-01", "Share2", [
+          "PAN of company / HO",
+          "Existing GSTIN of head office",
+          "List of branch GSTINs to receive credit",
+          "Authorisation letter",
+        ]),
+        active: false,
+        description: "For head offices distributing input tax credit for common input services to branch units.",
+        whoCanApply: "• Multi-unit businesses distributing common input service tax credits.",
+      },
+      {
+        ...svc("gst-ecom", "E-Commerce Operator", "E-Commerce", "GSTN", "REG-01", "ShoppingCart", [
+          "PAN of business",
+          "Proof of digital platform ownership / agreement",
+          "Aadhaar of directors / partners",
+          "Bank account proof",
+        ]),
+        active: false,
+        description: "Mandatory GST registration for e-commerce platform operators facilitating third-party supplies.",
+        whoCanApply: "• Platform operators facilitating supplies between sellers and buyers.\n• Required to collect TCS under GST.",
+      },
+      {
+        ...svc("gst-tds_tcs", "TDS / TCS Deductor", "TDS / TCS", "GSTN", "REG-07", "FileText", [
+          "TAN of government department / deductor",
+          "PAN of authorised officer",
+          "Office address proof",
+        ]),
+        active: false,
+        description: "For notified government bodies, local authorities, or specified deductors deducting TDS under GST.",
+        whoCanApply: "• Government departments & notified deductors deducting GST TDS on Form REG-07.",
+      },
+      {
+        ...svc("gst-other", "Special / Other GST Registration", "Special / SEZ", "GSTN", "REG-01", "Shield", [
+          "PAN of entity",
+          "SEZ approval letter / developer certificate",
+          "Address proof",
+        ]),
+        active: false,
+        description: "For SEZ units, developers, OIDAR service providers, and UN/embassy Unique Identity Number (UIN) applicants.",
+        whoCanApply: "• SEZ developers, SEZ units, OIDAR providers, and foreign embassy UIN applicants.",
+      },
       svc("pan-tan", "PAN & TAN", "PAN / TAN", "Income Tax / NSDL", "49A / 49B", "IdCard", [
         "Identity proof (Aadhaar / Passport)",
         "Address proof",
@@ -397,6 +512,7 @@ async function upsertService(subcategoryId: number, s: SeedService) {
     subcategoryId,
     name: s.name,
     description: s.description ?? null,
+    whoCanApply: s.whoCanApply ?? null,
     professionalFee: s.professionalFee.toFixed(2),
     govtFee: s.govtFee.toFixed(2),
     gstPercent: s.gstPercent.toFixed(2),
