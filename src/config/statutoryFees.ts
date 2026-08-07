@@ -264,9 +264,18 @@ export type CompanyFeeContext = {
   /** Short entity key (pvt, opc, sec8, …) — only `sec8` changes the fee here. */
   entity: string;
   entityClass?: "private" | "public" | null;
+  /**
+   * How the company's liability is limited. "guarantee" means a company limited
+   * by guarantee WITHOUT share capital — the fee then follows the members-based
+   * (Table I(II)) path instead of the authorised-capital slabs. Defaults to
+   * "shares" (limited by shares) when absent.
+   */
+  liability?: "shares" | "guarantee" | null;
   capital: number;
   /** Paid-up capital — drives the automatic small-company determination. */
   paidCapital: number;
+  /** Number of members — used only on the no-share-capital (guarantee) path. */
+  members?: number;
   state: string;
 };
 
@@ -290,6 +299,10 @@ export type ComputedFees = CombinedFees & {
  */
 export function deriveOpcSmall(ctx: CompanyFeeContext): boolean {
   if (ctx.entity === "opc") return true;
+  // A company limited by guarantee (no share capital) follows the members-based
+  // fee/stamp path and is never treated as an OPC/Small Company — mirrors the
+  // workbook, where selecting "no authorised capital" forces OPC/Small = No.
+  if (ctx.liability === "guarantee") return false;
   if (ctx.entity === "public" || ctx.entity === "producer" || ctx.entity === "foreign") return false;
   if (ctx.entityClass === "public") return false;
   if (ctx.entity === "sec8") return false;
@@ -307,10 +320,13 @@ export function computeFees(
     return { ...withProfessionalAndGst(professionalFee, s.lines, customLines), stateKnown: true };
   }
   const opcSmall = deriveOpcSmall(ctx);
+  // A company limited by guarantee has no share capital: the fee is driven by the
+  // number of members (Table I(II)) and authorised capital is treated as nil.
+  const hasCapital = ctx.liability !== "guarantee";
   const s = computeMcaStatutoryFees({
-    hasCapital: true,
-    authorisedCapital: ctx.capital,
-    members: 0,
+    hasCapital,
+    authorisedCapital: hasCapital ? ctx.capital : 0,
+    members: ctx.members ?? 0,
     opcSmall,
     section8: ctx.entity === "sec8",
     state: ctx.state,
@@ -339,12 +355,17 @@ export function parseFeeContext(raw: any): FeeContext | null {
     if (!Number.isFinite(paidCapital) || paidCapital < 0) paidCapital = capital;
     const entityClass =
       raw.entityClass === "public" ? "public" : raw.entityClass === "private" ? "private" : null;
+    const liability = raw.liability === "guarantee" ? "guarantee" : raw.liability === "shares" ? "shares" : null;
+    let members = Number(raw.members);
+    if (!Number.isFinite(members) || members < 0) members = 0;
     return {
       kind: "company",
       entity: typeof raw.entity === "string" ? raw.entity : "",
       entityClass,
+      liability,
       capital,
       paidCapital,
+      members: Math.floor(members),
       state: typeof raw.state === "string" ? raw.state : "",
     };
   }

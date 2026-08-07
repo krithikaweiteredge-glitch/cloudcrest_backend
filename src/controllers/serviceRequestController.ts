@@ -325,6 +325,9 @@ export async function generateSummaryPdf(req: AuthenticatedRequest, res: Respons
       directors,
       shareholders,
       capital,
+      // Company limited by guarantee: no share capital, priced off member count.
+      liability,
+      members,
       objects,
       address,
       city,
@@ -393,9 +396,15 @@ export async function generateSummaryPdf(req: AuthenticatedRequest, res: Respons
       drawRow("Proposed Name:", name1 ? `${name1} ${suffix || ""}`.trim() : "—");
       drawRow("Alternate Name:", name2 ? `${name2} ${suffix || ""}`.trim() : "—");
       drawRow("Filing Form:", form || "—");
+      if (liability) drawRow("Liability:", String(liability));
       drawRow("Directors Count:", String(directors || 0));
-      drawRow("Shareholders Count:", String(shareholders || 0));
-      drawRow("Authorised Capital:", `INR ${(capital || 0).toLocaleString("en-IN")}`);
+      // A company limited by guarantee has members and no share capital.
+      if (members != null && !capital) {
+        drawRow("Members Count:", String(members || 0));
+      } else {
+        drawRow("Shareholders Count:", String(shareholders || 0));
+        drawRow("Authorised Capital:", `INR ${(capital || 0).toLocaleString("en-IN")}`);
+      }
     }
 
     if (isGenericService) {
