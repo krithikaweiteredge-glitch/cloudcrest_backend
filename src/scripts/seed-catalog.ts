@@ -25,6 +25,7 @@ import {
 } from "../models/schema.js";
 import { eq } from "drizzle-orm";
 import { COMPANY_WIZARD_DEFAULTS } from "../config/companyWizardDefaults.js";
+import { EXACT_NAMES } from "../config/exactNames.js";
 
 type SeedService = {
   slug: string;
@@ -79,7 +80,7 @@ const companyService = (
   icon: "Building2",
   professionalFee: 0,
   govtFee: 0,
-  gstPercent: 18,
+  gstPercent: 0,
   documents: COMPANY_DOCS,
   active: slug === "company",
 });
@@ -109,7 +110,7 @@ const llpService = (
   icon: "Handshake",
   professionalFee: 0,
   govtFee: 0,
-  gstPercent: 18,
+  gstPercent: 0,
   documents: LLP_DOCS,
   active: slug === "llp",
 });
@@ -138,9 +139,50 @@ const svc = (
   icon,
   professionalFee: 0,
   govtFee: 0,
-  gstPercent: 18,
+  gstPercent: 0,
   documents,
 });
+
+// ---------------------------------------------------------------------------
+// Minimal rows for the "New registration additions" list. Only identity is
+// known — fees are 0 and the document checklist is empty, so an admin fills the
+// detail later in Admin → Services. Same unpriced convention as `svc` above;
+// these are active so they list in the customer sidebar. Form numbers are left
+// as "—" rather than invented.
+// ---------------------------------------------------------------------------
+const min = (
+  slug: string,
+  name: string,
+  shortTitle: string,
+  authority: string,
+  icon: string
+): SeedService => ({
+  slug,
+  name,
+  shortTitle,
+  authority,
+  formNo: "—",
+  icon,
+  professionalFee: 0,
+  govtFee: 0,
+  gstPercent: 0,
+  documents: [],
+});
+
+// Services seeded but hidden from the customer sidebar (active = false). The
+// industry-specific sub-heads live "inside" their department picker (surfaced via
+// the family endpoint), and a few originals aren't in the client document at all.
+const INACTIVE_SLUGS = new Set<string>([
+  // Industry-specific sub-heads — nested inside their department entry.
+  "ind-multi-state-coop", "ind-fertiliser-dealer", "ind-dta-sale", "ind-eou-exit",
+  "ind-eou-lop-extension", "ind-eou-setup", "ind-eou-exit-undertaking", "ind-eou-export-house",
+  "ind-eou-apr", "ind-eou-qpr", "ind-eou-qpr-implementation", "ind-restricted-import-export",
+  "ind-idr-eou", "ind-idr-sez", "ind-eou-legal-agreement", "ind-eou-lop", "ind-investment-advisor",
+  "ind-investment-funds", "ind-sez-unit", "ind-sez-codeveloper", "ind-sez-developer",
+  "ind-sez-clearance", "ind-ifldp-vision-doc", "ind-fdi", "ind-nbfc", "ind-food-license",
+  "ind-food-import-license", "ind-petty-food", "ind-cbse-affiliation", "ind-iem-part-a",
+  "ind-iem-part-b", "ind-nidhi-plus-fbo",
+]);
 
 const CATALOG: SeedGroup[] = [
   {
@@ -213,6 +255,10 @@ const CATALOG: SeedGroup[] = [
         "HUF deed on stamp paper",
         "Bank account proof",
       ]),
+      // New addition — Sole Proprietorship only. Trust & Society already exist in
+      // this subcategory (added via Admin, slugs `trust` / `society`), so they are
+      // deliberately not seeded here to avoid duplicate sidebar entries.
+      min("sole-proprietorship", "Sole Proprietorship", "Proprietorship", "—", "Store"),
     ],
   },
   {
@@ -347,20 +393,7 @@ const CATALOG: SeedGroup[] = [
         "Passport-size photograph",
         "Business registration proof (for TAN)",
       ]),
-      svc("msme", "MSME / Udyam", "MSME", "MoMSME", "Udyam", "Factory", [
-        "Aadhaar of proprietor / signatory",
-        "PAN of business",
-        "Bank account details",
-        "Business address proof",
-        "Investment & turnover details",
-      ]),
-      svc("iec", "IEC Import-Export", "IEC", "DGFT", "ANF-2A", "Globe", [
-        "PAN of applicant / entity",
-        "Aadhaar / voter ID of proprietor",
-        "Business address proof",
-        "Cancelled cheque of current account",
-        "Digital photograph",
-      ]),
+      // MSME & IEC live in "Other Business Registrations" per the client document.
       svc("dpiit", "Startup India / DPIIT", "DPIIT", "DPIIT", "Recognition", "Rocket", [
         "Certificate of incorporation",
         "PAN of entity",
@@ -368,10 +401,20 @@ const CATALOG: SeedGroup[] = [
         "Website / pitch deck",
         "Details of directors / founders",
       ]),
+      // New additions — in document order.
+      min("lut", "LUT (Letter of Undertaking)", "LUT", "GSTN", "Wallet"),
+      min("lower-tax-deduction", "Lower Tax Deduction Certificate", "Lower TDS", "Income Tax", "Wallet"),
+      min("80iac", "80IAC Tax Exemption (Startups)", "80IAC", "CBDT / DPIIT", "Rocket"),
+      min("12a", "12A Registration", "12A", "Income Tax", "HeartPulse"),
+      min("80g", "80G Registration", "80G", "Income Tax", "HeartPulse"),
+      min("icegate", "ICEGATE Registration", "ICEGATE", "CBIC", "Globe"),
+      min("form-10a", "Form 10A Registration", "Form 10A", "Income Tax", "Wallet"),
+      min("non-deduction-declaration", "Declaration for Non-Deduction of Tax", "Non-Deduction", "Income Tax", "Wallet"),
+      min("rcmc", "RCMC (Registration-cum-Membership Certificate)", "RCMC", "DGFT / EPC", "Globe"),
     ],
   },
   {
-    category: "Labour Law",
+    category: "Labour & Municipal License",
     subcategory: "Labour Registrations",
     services: [
       svc("labour-licence", "Labour Licence", "Labour Licence", "State Labour Dept.", "CLRA", "HardHat", [
@@ -397,19 +440,16 @@ const CATALOG: SeedGroup[] = [
         "Bank details",
         "Cancelled cheque",
       ]),
+      // New addition.
+      min("professional-tax", "Professional Tax Registration", "Professional Tax", "State Commercial Tax Dept.", "Coins"),
     ],
   },
   {
-    category: "Municipal Licences",
+    // Same category as Labour above — the sidebar groups by category, so these
+    // render together as the document's "Labour & Municipal License".
+    category: "Labour & Municipal License",
     subcategory: "Municipal Licences",
     services: [
-      svc("shop-establishment", "Shop & Establishment", "Shop & Estd.", "Municipal Corp.", "Form-A", "Store", [
-        "PAN & Aadhaar of proprietor",
-        "Address proof of shop",
-        "Rent agreement / ownership proof",
-        "Photograph of shop front",
-        "List of employees",
-      ]),
       svc("trade-licence", "Trade Licence", "Trade", "Municipal Corp.", "Form-1", "FileBadge2", [
         "PAN & Aadhaar of applicant",
         "Property tax receipt / ownership proof",
@@ -417,18 +457,13 @@ const CATALOG: SeedGroup[] = [
         "Layout plan of premises",
         "Photographs of the premises",
       ]),
-      svc("fire-noc", "Fire NOC", "Fire NOC", "Fire Dept.", "Fire-1", "FlameKindling", [
-        "Building plan approved by authority",
-        "Ownership / lease deed",
-        "Occupancy certificate",
-        "Details of fire safety measures",
-        "Photographs of installations",
-      ]),
     ],
   },
   {
-    category: "Industry Licences",
-    subcategory: "Industry Licences",
+    // The document lists FSSAI / Factory / Drug at the top of Industry Specific,
+    // with no separate "Industry Licences" group — so they live here.
+    category: "Industry Specific Registrations",
+    subcategory: "Licences",
     services: [
       svc("fssai", "FSSAI Licence", "FSSAI", "FSSAI", "Form A/B", "Leaf", [
         "PAN & Aadhaar of applicant",
@@ -438,13 +473,6 @@ const CATALOG: SeedGroup[] = [
         "Water test report",
         "Food safety management plan",
       ]),
-      svc("pollution-ncb", "Pollution Control NOC", "PCB Consent", "State PCB", "Consent", "ShieldCheck", [
-        "Incorporation certificate",
-        "Site plan & manufacturing process",
-        "Consent application form",
-        "Land documents",
-        "List of hazardous materials",
-      ]),
       svc("drug-licence", "Drug Licence", "Drug", "State FDA", "Form-19", "Pill", [
         "Site plan & key plan of premises",
         "Qualification certificates of pharmacist",
@@ -452,6 +480,8 @@ const CATALOG: SeedGroup[] = [
         "Ownership / rent proof",
         "Cold storage details (if applicable)",
       ]),
+      // New addition.
+      min("factory-licence", "Factory Licence", "Factory", "Dir. of Industrial Safety & Health", "Factory"),
     ],
   },
   {
@@ -488,6 +518,159 @@ const CATALOG: SeedGroup[] = [
         "Power of Attorney",
         "Class of article (Locarno)",
       ]),
+      // New addition.
+      min("layout-design", "Layout Design (Semiconductor)", "Layout Design", "SICLDR", "Palette"),
+    ],
+  },
+
+  // =========================================================================
+  // New categories from "New registration additions" — minimal rows, in the
+  // order given by the document. Fees are 0 and checklists empty pending Admin.
+  // =========================================================================
+  {
+    category: "Business Conversion",
+    subcategory: "Business Conversions",
+    services: [
+      min("conversion-pvt-to-public", "Private to Public Limited Company", "Pvt → Public", "MCA", "Building2"),
+      min("conversion-llp-to-pvt", "LLP to Private Limited Company", "LLP → Pvt Ltd", "MCA", "Building2"),
+      min("conversion-opc-to-pvt", "OPC to Private Limited Company", "OPC → Pvt Ltd", "MCA", "Building2"),
+      min("conversion-proprietorship-to-pvt", "Proprietorship to Private Limited Company", "Prop. → Pvt Ltd", "MCA", "Building2"),
+      min("conversion-partnership-to-pvt", "Partnership to Private Limited Company", "Partnership → Pvt Ltd", "MCA", "Building2"),
+      min("conversion-pvt-to-opc", "Private Limited to OPC", "Pvt Ltd → OPC", "MCA", "Building2"),
+      min("conversion-partnership-to-llp", "Partnership to LLP", "Partnership → LLP", "MCA", "Handshake"),
+      min("conversion-public-to-pvt", "Public to Private Limited Company", "Public → Pvt Ltd", "MCA", "Building2"),
+    ],
+  },
+  {
+    category: "Business Closure",
+    subcategory: "Business Closures",
+    services: [
+      min("closure-pvt", "Closure of Private Limited Company", "Closure Pvt Ltd", "MCA", "Building2"),
+      min("closure-llp", "Closure of LLP", "Closure LLP", "MCA", "Handshake"),
+      min("closure-opc", "Closure of OPC", "Closure OPC", "MCA", "Building2"),
+      min("closure-proprietorship", "Closure of Sole Proprietorship", "Closure Proprietorship", "—", "Store"),
+      min("closure-partnership", "Closure of Partnership Firm", "Closure Partnership", "Registrar of Firms", "Users"),
+      min("closure-nidhi", "Closure of Nidhi Company", "Closure Nidhi", "MCA", "Building2"),
+      min("closure-sec8", "Closure of Section 8 Company", "Closure Section 8", "MCA", "Building2"),
+      min("closure-public", "Closure of Public Limited Company", "Closure Public Ltd", "MCA", "Building2"),
+      min("closure-trust", "Dissolution of Trust", "Dissolution Trust", "Charity Commissioner", "Shield"),
+      min("closure-society", "Dissolution of Society", "Dissolution Society", "Registrar of Societies", "Users"),
+    ],
+  },
+  {
+    category: "Other Business Registrations",
+    subcategory: "Other Business Registrations",
+    services: [
+      svc("msme", "MSME / Udyam", "MSME", "MoMSME", "Udyam", "Factory", [
+        "Aadhaar of proprietor / signatory",
+        "PAN of business",
+        "Bank account details",
+        "Business address proof",
+        "Investment & turnover details",
+      ]),
+      svc("iec", "IEC Import-Export", "IEC", "DGFT", "ANF-2A", "Globe", [
+        "PAN of applicant / entity",
+        "Aadhaar / voter ID of proprietor",
+        "Business address proof",
+        "Cancelled cheque of current account",
+        "Digital photograph",
+      ]),
+      min("din", "Director Identification Number (DIN)", "DIN", "MCA", "IdCard"),
+      min("lei", "Legal Entity Identifier (LEI)", "LEI", "LEIL", "IdCard"),
+      min("ngo-darpan", "NGO Darpan (NPO)", "NGO Darpan", "NITI Aayog", "Users"),
+      min("rera", "RERA Registration", "RERA", "State RERA", "HomeIcon"),
+      min("dsc", "Digital Signature Certificate", "DSC", "Certifying Authority (CCA)", "FileBadge2"),
+      min("iso", "ISO Certification", "ISO", "Certification Body", "Award"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "Agriculture, Seeds, Fertilisers & Pesticides",
+    services: [
+      // Department entry (active, listed in the sidebar); its sub-heads below are
+      // inactive and shown inside its picker via the family endpoint.
+      min("ind-agri", "Agriculture, Seeds, Fertilisers & Pesticides", "Agriculture, Seeds, Fertilisers & Pesticides", "Agriculture, Seeds, Fertilisers & Pesticides", "FileBadge2"),
+      min("ind-multi-state-coop", "Registration of Multi-State Co-operative Society", "Multi-State Co-op", "Central Registrar of Co-operative Societies", "Leaf"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "Department of Agriculture, Cooperation and Farmers Welfare",
+    services: [
+      min("ind-dept-agriculture", "Department of Agriculture, Cooperation and Farmers Welfare", "Department of Agriculture, Cooperation and Farmers Welfare", "Department of Agriculture, Cooperation and Farmers Welfare", "FileBadge2"),
+      min("ind-fertiliser-dealer", "Registration for Sale of Fertilisers as an Industrial Dealer", "Fertiliser Dealer", "Dept. of Agriculture, Cooperation & Farmers Welfare", "Leaf"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "Department of Commerce",
+    services: [
+      min("ind-dept-commerce", "Department of Commerce", "Department of Commerce", "Department of Commerce", "FileBadge2"),
+      min("ind-dta-sale", "Application for DTA Sale / Advance DTA Sale Permission", "DTA Sale", "Department of Commerce", "Globe"),
+      min("ind-eou-exit", "Application for Exit from EOU Scheme (ANF-6D)", "EOU Exit", "Department of Commerce", "Globe"),
+      min("ind-eou-lop-extension", "Extension of Letter of Permission (LOP) for EOU", "EOU LOP Extension", "Department of Commerce", "Globe"),
+      min("ind-eou-setup", "Setting up of New Export Oriented Unit (EOU)", "New EOU", "Department of Commerce", "Globe"),
+      min("ind-eou-exit-undertaking", "Legal Undertaking for Exit of a Unit from EOU", "EOU Exit Undertaking", "Department of Commerce", "Globe"),
+      min("ind-eou-export-house", "Export House Certificate — EOU", "EOU Export House", "Department of Commerce", "Globe"),
+      min("ind-eou-apr", "Annual Progress Report (APR) for Working EOU Units", "EOU APR", "Department of Commerce", "Globe"),
+      min("ind-eou-qpr", "Quarterly Progress Report (QPR) for Working EOU Units", "EOU QPR", "Department of Commerce", "Globe"),
+      min("ind-eou-qpr-implementation", "QPR for EOU Units Under Implementation", "EOU QPR (Impl.)", "Department of Commerce", "Globe"),
+      min("ind-restricted-import-export", "Import / Export of Restricted Items", "Restricted Import/Export", "Department of Commerce", "Globe"),
+      min("ind-idr-eou", "Industrial License — IDR Act (EOU)", "IDR Act — EOU", "Department of Commerce", "Factory"),
+      min("ind-idr-sez", "Industrial License — IDR Act (SEZ)", "IDR Act — SEZ", "Department of Commerce", "Factory"),
+      min("ind-eou-legal-agreement", "Legal Agreement for EOU / EHTP / STP / BTP", "EOU Legal Agreement", "Department of Commerce", "Globe"),
+      min("ind-eou-lop", "Letter of Permission — EOU", "EOU LOP", "Department of Commerce", "Globe"),
+      min("ind-investment-advisor", "Registration as Investment Advisor", "Investment Advisor", "Department of Commerce", "Coins"),
+      min("ind-investment-funds", "Registration of Investment Funds", "Investment Funds", "Department of Commerce", "Coins"),
+      min("ind-sez-unit", "Setting up of SEZ Unit", "SEZ Unit", "Department of Commerce", "Globe"),
+      min("ind-sez-codeveloper", "Setting up SEZ (Co-developer)", "SEZ Co-developer", "Department of Commerce", "Globe"),
+      min("ind-sez-developer", "Setting up SEZ (Developer)", "SEZ Developer", "Department of Commerce", "Globe"),
+      min("ind-sez-clearance", "SEZ Clearance", "SEZ Clearance", "Department of Commerce", "Globe"),
+      min("ind-ifldp-vision-doc", "Vision Document Component under STEP Sub-scheme of IFLDP (2021-26)", "IFLDP Vision Doc", "Department of Commerce", "FileBadge2"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "Department of Finance",
+    services: [
+      min("ind-dept-finance", "Department of Finance", "Department of Finance", "Department of Finance", "FileBadge2"),
+      min("ind-fdi", "Foreign Direct Investment (FDI)", "FDI", "Department of Finance", "Coins"),
+      min("ind-nbfc", "Registration as Non-Banking Financial Company (NBFC)", "NBFC", "Department of Finance", "Wallet"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "Department of Health and Family Welfare",
+    services: [
+      min("ind-dept-health", "Department of Health and Family Welfare", "Department of Health and Family Welfare", "Department of Health and Family Welfare", "FileBadge2"),
+      min("ind-food-license", "License for Food Business", "Food Business", "Dept. of Health & Family Welfare", "Leaf"),
+      min("ind-food-import-license", "License for Importing Food Items, Ingredients & Additives", "Food Import", "Dept. of Health & Family Welfare", "Leaf"),
+      min("ind-petty-food", "Registration of Petty Food Business", "Petty Food", "Dept. of Health & Family Welfare", "Leaf"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "Department of School Education and Literacy",
+    services: [
+      min("ind-dept-education", "Department of School Education and Literacy", "Department of School Education and Literacy", "Department of School Education and Literacy", "FileBadge2"),
+      min("ind-cbse-affiliation", "CBSE Affiliation", "CBSE Affiliation", "Dept. of School Education & Literacy", "Award"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "DPIIT",
+    services: [
+      min("ind-dept-dpiit", "DPIIT", "DPIIT", "DPIIT", "FileBadge2"),
+      min("ind-iem-part-a", "Industrial Entrepreneur Memorandum (Part-A)", "IEM Part-A", "DPIIT", "Factory"),
+      min("ind-iem-part-b", "Industrial Entrepreneur Memorandum (Part-B)", "IEM Part-B", "DPIIT", "Factory"),
+    ],
+  },
+  {
+    category: "Industry Specific Registrations",
+    subcategory: "Ministry of Tourism",
+    services: [
+      min("ind-dept-tourism", "Ministry of Tourism", "Ministry of Tourism", "Ministry of Tourism", "FileBadge2"),
+      min("ind-nidhi-plus-fbo", "Food Business Operator Registration on NIDHI+", "NIDHI+ FBO", "Ministry of Tourism", "Store"),
     ],
   },
 ];
@@ -520,17 +703,20 @@ async function findOrCreateSubcategory(categoryId: number, name: string) {
 }
 
 async function upsertService(subcategoryId: number, s: SeedService) {
+  // Names/short titles come from the client document where one is defined for
+  // the slug, so both the seed and the catalog read exactly as the document.
+  const exactName = EXACT_NAMES[s.slug];
   const values = {
     subcategoryId,
-    name: s.name,
+    name: exactName ?? s.name,
     description: s.description ?? null,
     whoCanApply: s.whoCanApply ?? null,
     professionalFee: s.professionalFee.toFixed(2),
     govtFee: s.govtFee.toFixed(2),
     gstPercent: s.gstPercent.toFixed(2),
-    active: s.active ?? true,
+    active: INACTIVE_SLUGS.has(s.slug) ? false : (s.active ?? true),
     slug: s.slug,
-    shortTitle: s.shortTitle,
+    shortTitle: exactName ?? s.shortTitle,
     authority: s.authority,
     formNo: s.formNo,
     icon: s.icon,
