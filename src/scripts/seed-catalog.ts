@@ -169,6 +169,130 @@ const min = (
   documents: [],
 });
 
+// ---------------------------------------------------------------------------
+// Societies — captured from the live catalog (originally added via Admin, so
+// until now they lived only in the DB and not in this seed).
+//
+// Society registration is handled STATE-WISE: the Society wizard picks a TYPE
+// (MACS / Co-operative / general Society) AND a STATE (Telangana / Andhra
+// Pradesh / Karnataka), and every (type × state) combination has its OWN
+// who-can-apply, fee, documents and tabs. Each combination is therefore its own
+// service row (slug `society-<type>-<state>`), inactive and resolved by the
+// wizard exactly like the entity-type variants above. The three type rows stay
+// as neutral fallbacks; the base `society` row is the last resort. An admin
+// authors each combination in Admin → Services — they start empty and the wizard
+// falls back to the type row until then.
+//
+// The MACS content below is Telangana-specific (it cites the Telangana MACS Act,
+// 1995), so it is seeded onto the MACS × Telangana combo rather than the shared
+// MACS type row.
+// ---------------------------------------------------------------------------
+const MACS_ABOUT =
+  "A Mutually Aided Cooperative Society (MACS) is a self-reliant, member-owned and member-controlled cooperative registered under the Telangana Mutually Aided Co-operative Societies Act, 1995.\n" +
+  "It is specially suitable for flat owners’ associations, apartment maintenance societies, plot owners’ associations, gated communities, thrift & credit groups, and farmer producer organisations.\n" +
+  "Unlike traditional cooperative societies, MACS societies enjoy greater autonomy with minimal government interference and cannot accept share capital or land from the Government.";
+
+const MACS_WHO =
+  "1. A minimum of 21 individuals belonging to different families with a common bond (e.g., residents of the same apartment complex, layout, or colony).\n" +
+  "2. All promoters must be adults (18 years or above) and residents within the proposed area of operation.\n" +
+  "3. Existing societies registered under the Telangana Cooperative Societies Act, 1964 can also convert into a Mutually Aided Cooperative Society after returning any Government assistance.";
+
+const MACS_DOCS = [
+  "Proposed Bye-laws of the Society (duly signed by all promoters)",
+  "List of promoters with full details (Name, Father’s name, Age, Address, Occupation, Aadhaar number, Mobile number, Caste, Photograph)",
+  "Aadhaar cards and passport-size photographs of all promoters",
+  "Proof of address of the proposed registered office",
+];
+
+// The 3 society types and 3 states the wizard offers. The combination slug the
+// wizard resolves is `${type.slug}-${state.slug}`. In the admin catalog these nest
+// as a tree by slug prefix: `society` › type (`society-macs`) › state
+// (`society-macs-telangana`), so each type reads as a launcher with its three
+// states as steps below it — the same way GST shows its registration types.
+const SOCIETY_TYPES = [
+  { slug: "society-macs", label: "MACS", name: "Mutually Aided Cooperative Society" },
+  { slug: "society-coop", label: "Co-operative", name: "Co-operative Society" },
+  { slug: "society-general", label: "General", name: "Society (General)" },
+] as const;
+
+const SOCIETY_STATES = [
+  { state: "Telangana", slug: "telangana" },
+  { state: "Andhra Pradesh", slug: "andhra-pradesh" },
+  { state: "Karnataka", slug: "karnataka" },
+] as const;
+
+// Content already authored for a specific (type × state) cell, keyed by combo
+// slug. Every combo not listed here starts empty for the admin to fill in.
+const SOCIETY_COMBO_CONTENT: Record<
+  string,
+  Partial<Pick<SeedService, "description" | "whoCanApply" | "documents">>
+> = {
+  "society-macs-telangana": {
+    description: MACS_ABOUT,
+    whoCanApply: MACS_WHO,
+    documents: MACS_DOCS,
+  },
+};
+
+// One inactive row per cell of the 3×3 (type × state) grid. In the admin tree
+// these render as the state steps nested under their type, so the row name is just
+// the state ("Telangana"); the short title keeps the type for search. The wizard
+// overrides the displayed title anyway.
+const SOCIETY_COMBOS: SeedService[] = SOCIETY_TYPES.flatMap((t) =>
+  SOCIETY_STATES.map((st): SeedService => {
+    const slug = `${t.slug}-${st.slug}`;
+    const content = SOCIETY_COMBO_CONTENT[slug] ?? {};
+    return {
+      slug,
+      name: st.state,
+      shortTitle: `${t.label} · ${st.state}`,
+      authority: "Charity",
+      formNo: "—",
+      icon: "Award",
+      professionalFee: 0,
+      govtFee: 0,
+      gstPercent: 0,
+      documents: content.documents ?? [],
+      description: content.description,
+      whoCanApply: content.whoCanApply,
+      active: false,
+    };
+  })
+);
+
+// Society type rows — the launcher for each type's state steps (and the wizard's
+// fallback if a specific combination row is missing). Kept inactive so they never
+// appear in the customer sidebar. The base `society` row is active (it anchors the
+// wizard entry and is the top of the admin tree) but carries no content.
+const SOCIETY_TYPE_ROWS: SeedService[] = [
+  {
+    slug: "society",
+    name: "Society",
+    shortTitle: "Society",
+    authority: "Charity",
+    formNo: "Form A",
+    icon: "Award",
+    professionalFee: 0,
+    govtFee: 0,
+    gstPercent: 0,
+    documents: [],
+    active: true,
+  },
+  ...SOCIETY_TYPES.map((t): SeedService => ({
+    slug: t.slug,
+    name: t.name,
+    shortTitle: t.label,
+    authority: "Charity",
+    formNo: "—",
+    icon: "Award",
+    professionalFee: 0,
+    govtFee: 0,
+    gstPercent: 0,
+    documents: [],
+    active: false,
+  })),
+];
+
 // Services seeded but hidden from the customer sidebar (active = false). The
 // industry-specific sub-heads live "inside" their department picker (surfaced via
 // the family endpoint), and a few originals aren't in the client document at all.
@@ -255,10 +379,13 @@ const CATALOG: SeedGroup[] = [
         "HUF deed on stamp paper",
         "Bank account proof",
       ]),
-      // New addition — Sole Proprietorship only. Trust & Society already exist in
-      // this subcategory (added via Admin, slugs `trust` / `society`), so they are
-      // deliberately not seeded here to avoid duplicate sidebar entries.
+      // New addition — Sole Proprietorship. (Trust also lives in this subcategory,
+      // still admin-managed and intentionally not seeded here.)
       min("sole-proprietorship", "Sole Proprietorship", "Proprietorship", "—", "Store"),
+      // Society: the base row + three type fallbacks, then one row per (type ×
+      // state) combination. See the SOCIETY_* definitions above for the rationale.
+      ...SOCIETY_TYPE_ROWS,
+      ...SOCIETY_COMBOS,
     ],
   },
   {
