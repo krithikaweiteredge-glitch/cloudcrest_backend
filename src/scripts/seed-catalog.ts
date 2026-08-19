@@ -2,9 +2,12 @@
  * Seeds the service catalog with the figures and checklists the client supplied,
  * which until now lived hardcoded in the frontend.
  *
- * Idempotent: services are matched on `slug` and updated in place, so it is safe
- * to re-run after editing the tables below. Document types are replaced wholesale
- * for each seeded service.
+ * Insert-only & idempotent: services are matched on `slug`. A row that does NOT
+ * exist yet is created (with its document checklist); a row that ALREADY exists is
+ * left completely untouched. This means re-running the seed never overwrites
+ * content an admin has authored in Admin → Services (name, description, who-can-
+ * apply, fees, documents, tabs) — it only fills in rows that are still missing.
+ * To change an existing row, edit it in Admin → Services (or delete it and re-run).
  *
  *   npm run db:seed:catalog
  *
@@ -177,32 +180,15 @@ const min = (
 // (MACS / Co-operative / general Society) AND a STATE (Telangana / Andhra
 // Pradesh / Karnataka), and every (type × state) combination has its OWN
 // who-can-apply, fee, documents and tabs. Each combination is therefore its own
-// service row (slug `society-<type>-<state>`), inactive and resolved by the
-// wizard exactly like the entity-type variants above. The three type rows stay
-// as neutral fallbacks; the base `society` row is the last resort. An admin
-// authors each combination in Admin → Services — they start empty and the wizard
-// falls back to the type row until then.
+// service row (slug `society-<type>-<state>`), inactive and resolved by the wizard
+// exactly like the entity-type variants above.
 //
-// The MACS content below is Telangana-specific (it cites the Telangana MACS Act,
-// 1995), so it is seeded onto the MACS × Telangana combo rather than the shared
-// MACS type row.
+// This seed only creates the STRUCTURE (the base row, the three type rows and the
+// nine state rows) — it deliberately seeds NO About / Who / Documents / Fee. All
+// that content is authored and owned by the admin in Admin → Services, per state,
+// so re-running this seed never clobbers their work. The base + type rows are pure
+// grouping launchers and must stay content-free; content lives only on the states.
 // ---------------------------------------------------------------------------
-const MACS_ABOUT =
-  "A Mutually Aided Cooperative Society (MACS) is a self-reliant, member-owned and member-controlled cooperative registered under the Telangana Mutually Aided Co-operative Societies Act, 1995.\n" +
-  "It is specially suitable for flat owners’ associations, apartment maintenance societies, plot owners’ associations, gated communities, thrift & credit groups, and farmer producer organisations.\n" +
-  "Unlike traditional cooperative societies, MACS societies enjoy greater autonomy with minimal government interference and cannot accept share capital or land from the Government.";
-
-const MACS_WHO =
-  "1. A minimum of 21 individuals belonging to different families with a common bond (e.g., residents of the same apartment complex, layout, or colony).\n" +
-  "2. All promoters must be adults (18 years or above) and residents within the proposed area of operation.\n" +
-  "3. Existing societies registered under the Telangana Cooperative Societies Act, 1964 can also convert into a Mutually Aided Cooperative Society after returning any Government assistance.";
-
-const MACS_DOCS = [
-  "Proposed Bye-laws of the Society (duly signed by all promoters)",
-  "List of promoters with full details (Name, Father’s name, Age, Address, Occupation, Aadhaar number, Mobile number, Caste, Photograph)",
-  "Aadhaar cards and passport-size photographs of all promoters",
-  "Proof of address of the proposed registered office",
-];
 
 // The 3 society types and 3 states the wizard offers. The combination slug the
 // wizard resolves is `${type.slug}-${state.slug}`. In the admin catalog these nest
@@ -221,27 +207,13 @@ const SOCIETY_STATES = [
   { state: "Karnataka", slug: "karnataka" },
 ] as const;
 
-// Content already authored for a specific (type × state) cell, keyed by combo
-// slug. Every combo not listed here starts empty for the admin to fill in.
-const SOCIETY_COMBO_CONTENT: Record<
-  string,
-  Partial<Pick<SeedService, "description" | "whoCanApply" | "documents">>
-> = {
-  "society-macs-telangana": {
-    description: MACS_ABOUT,
-    whoCanApply: MACS_WHO,
-    documents: MACS_DOCS,
-  },
-};
-
 // One inactive row per cell of the 3×3 (type × state) grid. In the admin tree
 // these render as the state steps nested under their type, so the row name is just
-// the state ("Telangana"); the short title keeps the type for search. The wizard
-// overrides the displayed title anyway.
+// the state ("Telangana"); the short title keeps the type for search. Structure
+// only — content is authored per state by the admin (see note above).
 const SOCIETY_COMBOS: SeedService[] = SOCIETY_TYPES.flatMap((t) =>
   SOCIETY_STATES.map((st): SeedService => {
     const slug = `${t.slug}-${st.slug}`;
-    const content = SOCIETY_COMBO_CONTENT[slug] ?? {};
     return {
       slug,
       name: st.state,
@@ -252,13 +224,45 @@ const SOCIETY_COMBOS: SeedService[] = SOCIETY_TYPES.flatMap((t) =>
       professionalFee: 0,
       govtFee: 0,
       gstPercent: 0,
-      documents: content.documents ?? [],
-      description: content.description,
-      whoCanApply: content.whoCanApply,
+      documents: [],
       active: false,
     };
   })
 );
+
+// ---------------------------------------------------------------------------
+// State-wise entity registrations — Partnership, Trust, HUF and Sole
+// Proprietorship are registered STATE-WISE exactly the way societies are (see
+// SOCIETY_* above). The wizard picks the entity (and, for partnership, its
+// Registered / Unregistered type) AND a state, and every combination has its own
+// who-can-apply, fee, documents and tabs. Each combination is therefore its own
+// inactive row (slug `<base>-<state>`), resolved by the wizard and authored per
+// state by the admin. Structure only — no content is seeded (so re-running never
+// clobbers the admin's per-state work), identical to SOCIETY_COMBOS.
+//
+// One row per state for a given base slug (a type row for partnership, the base
+// entity row otherwise). `shortPrefix` keeps the entity in the short title so it
+// stays searchable; the row name is just the state, so it reads as a state step
+// nested under its parent in the admin tree.
+const stateCombos = (
+  baseSlug: string,
+  shortPrefix: string,
+  authority: string,
+  icon: string
+): SeedService[] =>
+  SOCIETY_STATES.map((st): SeedService => ({
+    slug: `${baseSlug}-${st.slug}`,
+    name: st.state,
+    shortTitle: `${shortPrefix} · ${st.state}`,
+    authority,
+    formNo: "—",
+    icon,
+    professionalFee: 0,
+    govtFee: 0,
+    gstPercent: 0,
+    documents: [],
+    active: false,
+  }));
 
 // Society type rows — the launcher for each type's state steps (and the wizard's
 // fallback if a specific combination row is missing). Kept inactive so they never
@@ -379,13 +383,22 @@ const CATALOG: SeedGroup[] = [
         "HUF deed on stamp paper",
         "Bank account proof",
       ]),
-      // New addition — Sole Proprietorship. (Trust also lives in this subcategory,
-      // still admin-managed and intentionally not seeded here.)
+      // New addition — Sole Proprietorship. (The base `trust` row lives in this
+      // subcategory too, still admin-managed and intentionally not seeded here so
+      // its content is never clobbered — only its per-state rows are seeded below.)
       min("sole-proprietorship", "Sole Proprietorship", "Proprietorship", "—", "Store"),
       // Society: the base row + three type fallbacks, then one row per (type ×
       // state) combination. See the SOCIETY_* definitions above for the rationale.
       ...SOCIETY_TYPE_ROWS,
       ...SOCIETY_COMBOS,
+      // Per-state rows for the other state-wise entities (same pattern as Society).
+      // Partnership nests under its Registered / Unregistered type rows; HUF, Sole
+      // Proprietorship and Trust nest directly under their base entity row.
+      ...stateCombos("partnership-registered", "Registered", "Registrar of Firms", "Users"),
+      ...stateCombos("partnership-unregistered", "Unregistered", "Partnership Deed", "Users"),
+      ...stateCombos("huf", "HUF", "Income Tax", "HomeIcon"),
+      ...stateCombos("sole-proprietorship", "Proprietorship", "—", "Store"),
+      ...stateCombos("trust", "Trust", "Charity Commissioner", "Shield"),
     ],
   },
   {
@@ -830,8 +843,19 @@ async function findOrCreateSubcategory(categoryId: number, name: string) {
 }
 
 async function upsertService(subcategoryId: number, s: SeedService) {
-  // Names/short titles come from the client document where one is defined for
-  // the slug, so both the seed and the catalog read exactly as the document.
+  const [existing] = await db.select().from(services).where(eq(services.slug, s.slug)).limit(1);
+
+  // Insert-only: a row that already exists is left exactly as it is. Its name,
+  // description, who-can-apply, fees, documents and tabs may have been authored by
+  // an admin, and re-running the seed must never disturb that — so we skip it
+  // entirely (no field update, no document changes) and only report it as skipped.
+  if (existing) {
+    return { serviceId: existing.id, created: false };
+  }
+
+  // New row → create it from the seed definition. Names/short titles come from the
+  // client document where one is defined for the slug, so the seed and the catalog
+  // read exactly as the document.
   const exactName = EXACT_NAMES[s.slug];
   const values = {
     subcategoryId,
@@ -849,38 +873,26 @@ async function upsertService(subcategoryId: number, s: SeedService) {
     icon: s.icon,
   };
 
-  const [existing] = await db.select().from(services).where(eq(services.slug, s.slug)).limit(1);
+  // On first insert, seed the company entity-type rules from the shared backend
+  // defaults so the values live in the DB (not the frontend).
+  const wizardRules = COMPANY_WIZARD_DEFAULTS[s.slug]
+    ? JSON.stringify(COMPANY_WIZARD_DEFAULTS[s.slug])
+    : null;
+  const [created] = await db.insert(services).values({ ...values, wizardRules }).returning();
+  const serviceId = created.id;
 
-  let serviceId: number;
-  if (existing) {
-    // wizardRules is intentionally left out of `values`, so re-seeding never
-    // overwrites rules an admin has edited in the catalog.
-    await db.update(services).set(values).where(eq(services.id, existing.id));
-    serviceId = existing.id;
-  } else {
-    // On first insert, seed the company entity-type rules from the shared
-    // backend defaults so the values live in the DB (not the frontend).
-    const wizardRules = COMPANY_WIZARD_DEFAULTS[s.slug]
-      ? JSON.stringify(COMPANY_WIZARD_DEFAULTS[s.slug])
-      : null;
-    const [created] = await db.insert(services).values({ ...values, wizardRules }).returning();
-    serviceId = created.id;
-  }
-
-  // Replace the checklist so re-running never duplicates rows.
-  await db.delete(documentTypes).where(eq(documentTypes.serviceId, serviceId));
   if (s.documents.length > 0) {
     await db.insert(documentTypes).values(
       s.documents.map((name) => ({ serviceId, name, mandatory: true }))
     );
   }
 
-  return { serviceId, created: !existing };
+  return { serviceId, created: true };
 }
 
 async function main() {
   let created = 0;
-  let updated = 0;
+  let skipped = 0;
 
   for (const group of CATALOG) {
     const categoryId = await findOrCreateCategory(group.category);
@@ -888,21 +900,28 @@ async function main() {
 
     for (const s of group.services) {
       const res = await upsertService(subcategoryId, s);
-      if (res.created) created++;
-      else updated++;
-      console.log(
-        `  ${res.created ? "created" : "updated"}  ${s.slug.padEnd(20)} ` +
-          `₹${s.professionalFee} + ₹${s.govtFee} + ${s.gstPercent}% GST  ` +
-          `(${s.documents.length} docs)${s.active === false ? "  [unlisted variant]" : ""}`
-      );
+      if (res.created) {
+        created++;
+        console.log(
+          `  created  ${s.slug.padEnd(20)} ` +
+            `₹${s.professionalFee} + ₹${s.govtFee} + ${s.gstPercent}% GST  ` +
+            `(${s.documents.length} docs)${s.active === false ? "  [unlisted variant]" : ""}`
+        );
+      } else {
+        skipped++;
+        // Left untouched so admin-authored content is never overwritten.
+        console.log(`  skipped  ${s.slug.padEnd(20)} (already exists — kept as-is)`);
+      }
     }
   }
 
+  // Only meaningful for freshly created rows; existing rows keep whatever pricing
+  // the admin set, which the seed no longer sees or touches.
   const unpriced = CATALOG.flatMap((g) => g.services).filter(
     (s) => s.professionalFee === 0 && s.govtFee === 0
   );
 
-  console.log(`\nDone. ${created} created, ${updated} updated.`);
+  console.log(`\nDone. ${created} created, ${skipped} skipped (existing rows left untouched).`);
   if (unpriced.length > 0) {
     console.log(
       `\n${unpriced.length} services have no pricing (the client never supplied one):\n  ` +
