@@ -2,6 +2,64 @@ import { Request, Response } from "express";
 import { db } from "../config/db.js";
 import { businesses } from "../models/schema.js";
 import { eq } from "drizzle-orm";
+import { env } from "../config/env.js";
+
+/** A company match returned to the client from the RocketReach lookup. */
+type CompanyMatch = { id?: number; name: string; domain?: string; industry?: string; location?: string };
+
+/** Collapse a name to a comparable key (lowercase, alphanumerics only). */
+const normalizeName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Strip the Indian legal suffix so the search matches on the brand name.
+ * RocketReach indexes companies by their brand ("Acme Tech"), not the full legal
+ * name ("Acme Tech Private Limited").
+ */
+function coreName(name: string): string {
+  return name
+    .replace(
+      /\b(private limited|pvt\.?\s*ltd\.?|limited|ltd\.?|llp|opc|one person company|producer company|nidhi(?:\s+limited)?|section\s*8|foundation|trust|association|society)\b/gi,
+      "",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Query the RocketReach Company Search API for companies with the given name.
+ * Returns the matches, or `null` when the API is not configured or unreachable —
+ * so the name check degrades to the local checks instead of failing.
+ * Docs: https://docs.rocketreach.co/reference/company-search-api
+ */
+async function searchRocketReachByName(name: string): Promise<CompanyMatch[] | null> {
+  if (!env.rocketReachApiKey) return null;
+  try {
+    const resp = await fetch("https://api.rocketreach.co/api/v2/searchCompany", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Api-Key": env.rocketReachApiKey },
+      body: JSON.stringify({ query: { name: [name] }, page_size: 5, order_by: "relevance" }),
+    });
+    if (!resp.ok) {
+      console.error("RocketReach searchCompany failed:", resp.status);
+      return null;
+    }
+    const data = await resp.json();
+    // The API returns an array of company objects; tolerate an envelope too.
+    const arr: any[] = Array.isArray(data) ? data : Array.isArray(data?.companies) ? data.companies : [];
+    return arr
+      .filter((c) => c && c.name)
+      .map((c) => ({
+        id: c.id,
+        name: String(c.name),
+        domain: c.email_domain || c.domain || undefined,
+        industry: c.industry_str || c.industry || undefined,
+        location: [c.city, c.region, c.country_code].filter(Boolean).join(", ") || undefined,
+      }));
+  } catch (err) {
+    console.error("RocketReach searchCompany error:", err);
+    return null;
+  }
+}
 
 // 1. MCA NAME AVAILABILITY CHECKER
 export async function checkNameAvailability(req: Request, res: Response) {
@@ -37,10 +95,44 @@ export async function checkNameAvailability(req: Request, res: Response) {
       });
     }
 
-    // Default to available if both checks pass
+    // Does a company with this name already exist? Ask the RocketReach Company
+    // Search API (searching the brand name without the legal suffix).
+    const core = coreName(trimmedName) || trimmedName;
+    const matches = await searchRocketReachByName(core);
+
+    if (matches && matches.length > 0) {
+      const wanted = normalizeName(core);
+      // A company "using this name" = its brand equals, or begins with, the
+      // searched brand. RocketReach stores the brand ("Weiteredge Technologies"),
+      // not the Indian legal suffix, so "<name> LLP" and "<name> Private Limited"
+      // resolve to the same brand match — the suffix only changes the wording.
+      const strong = matches.filter((m) => {
+        const n = normalizeName(m.name);
+        return n === wanted || n.startsWith(wanted) || wanted.startsWith(n);
+      });
+      if (strong.length > 0) {
+        return res.status(200).json({
+          available: false,
+          reason: `“${trimmedName}” is not available — a company using this name already exists: ${strong[0].name}.`,
+          matches: strong.slice(0, 5),
+          source: "rocketreach",
+        });
+      }
+      // Only loose/partial matches — the name is still free, but surface the
+      // similar companies so the applicant can pick a more distinctive name.
+      return res.status(200).json({
+        available: true,
+        message: `“${trimmedName}” appears to be available.`,
+        similar: matches.slice(0, 5),
+        source: "rocketreach",
+      });
+    }
+
+    // Default to available if every check passes.
     return res.status(200).json({
       available: true,
       message: "Preliminary check passed. The name appears to be available.",
+      source: matches === null ? "local" : "rocketreach",
     });
   } catch (error: any) {
     console.error("MCA name check error:", error);

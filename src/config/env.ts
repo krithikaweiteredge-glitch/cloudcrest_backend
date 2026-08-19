@@ -46,4 +46,8 @@ export const env = {
     .split(",")
     .map((o) => o.trim().replace(/\/+$/, ""))
     .filter(Boolean),
+  // RocketReach Company Search API key, used by the home-page name check to see
+  // whether a company with the searched name already exists. Optional: when unset
+  // the name check falls back to the local checks only.
+  rocketReachApiKey: (process.env.ROCKETREACH_API_KEY || "").trim(),
 };
