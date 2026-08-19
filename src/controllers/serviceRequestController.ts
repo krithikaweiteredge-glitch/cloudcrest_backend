@@ -804,11 +804,13 @@ export async function linkVaultDocuments(req: AuthenticatedRequest, res: Respons
   try {
     const requestId = parseInt(req.params.id as string, 10);
     const userId = req.user!.id;
-    const { docIds } = req.body;
+    const { docIds, label } = req.body;
 
     if (!Array.isArray(docIds) || docIds.length === 0) {
-      return res.status(200).json({ message: "No vault docs selected" });
+      return res.status(400).json({ error: "No vault docs selected" });
     }
+
+    const targetLabel = typeof label === "string" ? label.trim() : "";
 
     for (const docId of docIds) {
       const [existing] = await db
@@ -818,10 +820,23 @@ export async function linkVaultDocuments(req: AuthenticatedRequest, res: Respons
         .limit(1);
 
       if (existing) {
+        let cleanName = existing.name;
+        if (cleanName.includes(" :: ")) {
+          cleanName = cleanName.split(" :: ").slice(1).join(" :: ").trim();
+        } else if (cleanName.includes(" - ")) {
+          const parts = cleanName.split(" - ");
+          if (parts.length > 1) {
+            cleanName = parts.slice(1).join(" - ").trim();
+          }
+        }
+        if (!cleanName) cleanName = existing.name;
+
+        const newName = targetLabel ? `${targetLabel} :: ${cleanName}` : cleanName;
+
         await db.insert(requestDocuments).values({
           requestId,
           userId,
-          name: existing.name,
+          name: newName,
           sizeBytes: existing.sizeBytes,
           storagePath: existing.storagePath,
           mimeType: existing.mimeType,
