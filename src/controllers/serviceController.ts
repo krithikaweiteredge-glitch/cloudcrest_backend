@@ -109,6 +109,8 @@ export async function getPublicCatalog(req: Request, res: Response) {
         icon: services.icon,
         authority: services.authority,
         formNo: services.formNo,
+        timelineDays: services.timelineDays,
+        documentsCount: services.documentsCount,
         categoryId: serviceCategories.id,
         categoryName: serviceCategories.name,
       })
@@ -136,6 +138,8 @@ export async function getPublicCatalog(req: Request, res: Response) {
         authority: row.authority || "",
         form: row.formNo || "",
         icon: row.icon,
+        timelineDays: row.timelineDays,
+        documentsCount: row.documentsCount,
       });
     }
 
@@ -158,7 +162,7 @@ export async function getPublicCatalog(req: Request, res: Response) {
  * so `active` is intentionally NOT filtered here — the wizard needs every
  * variant regardless. Only pricing is withheld; this list carries no fees.
  */
-export async function getServiceFamily(req: Request, res: Response) {
+export async function getServiceFamily(req: AuthenticatedRequest, res: Response) {
   try {
     const slug = req.params.slug as string;
     if (!slug) {
@@ -177,13 +181,17 @@ export async function getServiceFamily(req: Request, res: Response) {
         icon: services.icon,
         active: services.active,
         wizardRules: services.wizardRules,
+        professionalFee: services.professionalFee,
       })
       .from(services)
       .where(eq(services.subcategoryId, base.subcategoryId))
       .orderBy(asc(services.id));
 
     // Drop the base row and anything without a slug (the slug is what the wizard
-    // uses to resolve per-variant pricing via `useCatalogService`).
+    // uses to resolve per-variant pricing via `useCatalogService`). The type
+    // picker shows each type's professional fee + GST up front (even to signed-out
+    // visitors), so `professionalFee` is returned to everyone here — unlike the
+    // full quote on the service-detail endpoint, which stays behind sign-in.
     const variants = rows.filter((r) => r.slug && r.slug !== slug);
     return res.status(200).json({ variants });
   } catch (error: any) {

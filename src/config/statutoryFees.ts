@@ -279,7 +279,12 @@ export type CompanyFeeContext = {
   state: string;
 };
 
-export type LlpFeeContext = { kind: "llp"; contribution: number };
+export type LlpFeeContext = {
+  kind: "llp";
+  contribution: number;
+  /** Indian LLP (FiLLiP) vs Foreign LLP (FC) — selects the per-type catalog row. */
+  jurisdiction?: "indian" | "foreign";
+};
 
 export type FeeContext = CompanyFeeContext | LlpFeeContext;
 
@@ -344,7 +349,10 @@ export function parseFeeContext(raw: any): FeeContext | null {
   if (raw.kind === "llp") {
     const contribution = Number(raw.contribution);
     if (!Number.isFinite(contribution) || contribution < 0) return null;
-    return { kind: "llp", contribution };
+    // Jurisdiction only selects the professional-fee row (Indian vs Foreign); the
+    // statutory formula is the same for both. Default to Indian.
+    const jurisdiction = raw.jurisdiction === "foreign" ? "foreign" : "indian";
+    return { kind: "llp", contribution, jurisdiction };
   }
   if (raw.kind === "company") {
     const capital = Number(raw.capital);

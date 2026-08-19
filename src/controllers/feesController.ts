@@ -12,7 +12,12 @@ import {
 
 /** The catalog slugs to try, in priority order, for a fee context's professional fee. */
 export function slugsForContext(ctx: FeeContext): string[] {
-  if (ctx.kind === "llp") return ["llp"];
+  if (ctx.kind === "llp") {
+    // Indian vs Foreign LLP carry different professional fees, priced on their own
+    // rows; fall back to the base `llp` row if a per-type row isn't set up yet.
+    const typeSlug = ctx.jurisdiction === "foreign" ? "llp-foreign" : "llp-indian";
+    return [typeSlug, "llp"];
+  }
   return [`company-${ctx.entity}`, "company"];
 }
 
