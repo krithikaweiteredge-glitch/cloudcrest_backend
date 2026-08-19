@@ -1,8 +1,8 @@
 import { Response } from "express";
 import { db } from "../config/db.js";
-import { serviceRequests, requestDocuments } from "../models/schema.js";
+import { serviceRequests, requestDocuments, services, documentTypes } from "../models/schema.js";
 import { AuthenticatedRequest } from "../middlewares/authMiddleware.js";
-import { eq, and, desc, or, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, or, isNull } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import { saveUpload } from "../utils/storage.js";
 import { parseFeeContext } from "../config/statutoryFees.js";
@@ -138,6 +138,80 @@ export async function listServiceRequests(req: AuthenticatedRequest, res: Respon
       .where(whereCondition)
       .orderBy(desc(serviceRequests.createdAt));
 
+/** Helper to resolve required document types for a service request from the database catalog. */
+async function resolveRequiredDocsForRequest(serviceSlug: string, serviceTitle: string): Promise<string[]> {
+  try {
+    const slugsToTry = [serviceSlug];
+    if (serviceSlug && serviceSlug.startsWith("company-")) slugsToTry.push("company");
+    if (serviceSlug && serviceSlug.startsWith("llp-")) slugsToTry.push("llp");
+
+    for (const slug of slugsToTry) {
+      if (!slug) continue;
+      const [serviceRow] = await db
+        .select({ id: services.id })
+        .from(services)
+        .where(eq(services.slug, slug))
+        .limit(1);
+
+      if (serviceRow) {
+        const docTypes = await db
+          .select({ name: documentTypes.name })
+          .from(documentTypes)
+          .where(eq(documentTypes.serviceId, serviceRow.id))
+          .orderBy(asc(documentTypes.id));
+
+        if (docTypes.length > 0) {
+          return docTypes.map((d) => d.name);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error resolving required docs from DB:", err);
+  }
+
+  // Fallback checklist by title if DB document_types table rows haven't been seeded for that custom slug
+  const title = (serviceTitle || serviceSlug || "").toLowerCase();
+  if (title.includes("company") || title.includes("incorporation") || (serviceSlug && serviceSlug.includes("company"))) {
+    return [
+      "PAN Card of Directors",
+      "Aadhaar Card / Photo ID of Directors",
+      "Passport-size Photographs of Directors",
+      "Address Proof of Directors (Utility Bill < 2 months)",
+      "Registered Office Premises Proof",
+      "Rent Agreement + NOC (if rented)",
+      "Digital Signature Certificate (DSC)",
+      "MoA & AoA Drafts",
+    ];
+  }
+  if (title.includes("llp") || (serviceSlug && serviceSlug.includes("llp"))) {
+    return [
+      "PAN Card of Designated Partners",
+      "Aadhaar Card / Photo ID of Partners",
+      "Passport-size Photographs of Partners",
+      "Address Proof of Partners (Utility Bill < 2 months)",
+      "Registered Office Premises Proof of LLP",
+      "Rent Agreement + NOC (if rented)",
+      "Digital Signature Certificate (DSC) of Partners",
+      "LLP Agreement Draft",
+    ];
+  }
+  if (title.includes("gst")) {
+    return [
+      "PAN Card of Entity / Proprietor",
+      "Aadhaar Card of Proprietor / Partners / Directors",
+      "Business Premises Address Proof",
+      "Bank Account Proof (Cancelled Cheque / Passbook)",
+      "Owner NOC / Rent Agreement",
+    ];
+  }
+  return [
+    "PAN Card of Applicant / Entity",
+    "Aadhaar / Photo ID Proof",
+    "Address Proof of Premises",
+    "Business Registration Proof",
+  ];
+}
+
     if (limit && !isNaN(limit)) {
       query = query.limit(limit) as any;
     }
@@ -153,6 +227,8 @@ export async function listServiceRequests(req: AuthenticatedRequest, res: Respon
           .where(eq(requestDocuments.requestId, item.id))
           .orderBy(desc(requestDocuments.createdAt));
 
+        const requiredDocs = await resolveRequiredDocsForRequest(item.serviceSlug, item.serviceTitle);
+
         // Surface the snapshotted fee total (stored inside formData) so the
         // orders list shows the real amount rather than a placeholder.
         let total: number | null = null;
@@ -165,6 +241,7 @@ export async function listServiceRequests(req: AuthenticatedRequest, res: Respon
           ...item,
           total,
           documents: docs,
+          requiredDocuments: requiredDocs,
         };
       })
     );
@@ -207,9 +284,12 @@ export async function getServiceRequestById(req: AuthenticatedRequest, res: Resp
       .where(eq(requestDocuments.requestId, requestId))
       .orderBy(desc(requestDocuments.createdAt));
 
+    const requiredDocs = await resolveRequiredDocsForRequest(request.serviceSlug, request.serviceTitle);
+
     return res.status(200).json({
       ...request,
       documents: docs,
+      requiredDocuments: requiredDocs,
     });
   } catch (error: any) {
     console.error("Get service request by ID error:", error);
@@ -250,14 +330,17 @@ export async function uploadRequestDocument(req: AuthenticatedRequest, res: Resp
     }
 
     const savedDocs = [];
+    const docLabel = (req.body && typeof req.body.label === "string" ? req.body.label.trim() : "") ||
+                     (req.body && typeof req.body.documentType === "string" ? req.body.documentType.trim() : "");
     for (const f of files) {
       const storagePath = await saveUpload(f);
+      const name = docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname;
       const [inserted] = await db
         .insert(requestDocuments)
         .values({
           requestId,
           userId,
-          name: f.originalname,
+          name,
           sizeBytes: f.size,
           storagePath,
           mimeType: f.mimetype,
