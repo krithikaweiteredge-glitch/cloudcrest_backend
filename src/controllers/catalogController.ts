@@ -177,13 +177,20 @@ function feeStr(v: any, fallback = "0"): string {
   return isNaN(n) ? fallback : n.toFixed(2);
 }
 
+/** Parse an optional integer field (e.g. documents count); blank/invalid -> null. */
+function intOrNull(v: any): number | null {
+  if (v === undefined || v === null || v === "") return null;
+  const n = parseInt(String(v), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 function slugify(v: string): string {
   return v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 export async function createService(req: AuthenticatedRequest, res: Response) {
   try {
-    const { subcategoryId, name, description, professionalFee, govtFee, gstPercent, active, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
+    const { subcategoryId, name, description, professionalFee, govtFee, gstPercent, active, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, timelineDays, documentsCount, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
     const sid = parseInt(subcategoryId as string, 10);
     if (isNaN(sid) || !name || !name.trim()) return res.status(400).json({ error: "Subcategory and name required" });
 
@@ -211,6 +218,8 @@ export async function createService(req: AuthenticatedRequest, res: Response) {
         whoCanApply: whoCanApply?.trim() || null,
         actsRules: actsRules?.trim() || null,
         validity: validity?.trim() || null,
+        timelineDays: timelineDays?.trim() || null,
+        documentsCount: intOrNull(documentsCount),
         nswsApplied: nswsApplied === undefined ? false : !!nswsApplied,
         actsRulesPdfs: actsRulesPdfs?.trim() || null,
         tabs: tabs?.trim() || null,
@@ -229,7 +238,7 @@ export async function updateService(req: AuthenticatedRequest, res: Response) {
   try {
     const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
-    const { name, description, professionalFee, govtFee, gstPercent, active, subcategoryId, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
+    const { name, description, professionalFee, govtFee, gstPercent, active, subcategoryId, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, timelineDays, documentsCount, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
 
     const patch: Record<string, any> = {};
     if (name !== undefined) patch.name = String(name).trim();
@@ -246,6 +255,8 @@ export async function updateService(req: AuthenticatedRequest, res: Response) {
     if (whoCanApply !== undefined) patch.whoCanApply = whoCanApply?.trim() || null;
     if (actsRules !== undefined) patch.actsRules = actsRules?.trim() || null;
     if (validity !== undefined) patch.validity = validity?.trim() || null;
+    if (timelineDays !== undefined) patch.timelineDays = timelineDays?.trim() || null;
+    if (documentsCount !== undefined) patch.documentsCount = intOrNull(documentsCount);
     if (nswsApplied !== undefined) patch.nswsApplied = !!nswsApplied;
     if (actsRulesPdfs !== undefined) patch.actsRulesPdfs = actsRulesPdfs?.trim() || null;
     if (tabs !== undefined) patch.tabs = tabs?.trim() || null;

@@ -330,10 +330,14 @@ const CATALOG: SeedGroup[] = [
   {
     category: "Entity Registration",
     subcategory: "LLP Registration",
-    // The LLP wizard has no entity-type step — every application is a standard
-    // LLP — so there is a single row here, unlike Company.
+    // The LLP wizard picks Indian vs Foreign LLP; each is priced on its own
+    // (inactive) row so the professional fee can differ, while the statutory
+    // FiLLiP formula stays the same. The base `llp` row anchors the wizard and is
+    // the fallback when a per-type row isn't priced yet.
     services: [
       llpService("llp", "LLP Registration", "LLP", "FiLLiP"),
+      { ...llpService("llp-indian", "Indian LLP", "Indian LLP", "FiLLiP"), professionalFee: 5999, active: false },
+      { ...llpService("llp-foreign", "Foreign LLP", "Foreign LLP", "Form 27 (FC)"), professionalFee: 8999, active: false },
     ],
   },
   {

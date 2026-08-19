@@ -40,6 +40,10 @@ export const services = pgTable("services", {
   whoCanApply: text("who_can_apply"),
   actsRules: text("acts_rules"),
   validity: varchar("validity", { length: 255 }),
+  // Home-page card chips: turnaround (e.g. "7–10 Days") and the document count.
+  // Admin-editable so they're no longer hardcoded in the frontend.
+  timelineDays: varchar("timeline_days", { length: 60 }),
+  documentsCount: integer("documents_count"),
   nswsApplied: boolean("nsws_applied").default(false),
   actsRulesPdfs: text("acts_rules_pdfs"),
   tabs: text("tabs"),
