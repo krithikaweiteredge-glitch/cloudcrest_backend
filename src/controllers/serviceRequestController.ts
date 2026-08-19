@@ -173,26 +173,24 @@ async function resolveRequiredDocsForRequest(serviceSlug: string, serviceTitle: 
   const title = (serviceTitle || serviceSlug || "").toLowerCase();
   if (title.includes("company") || title.includes("incorporation") || (serviceSlug && serviceSlug.includes("company"))) {
     return [
-      "PAN Card of Directors",
-      "Aadhaar Card / Photo ID of Directors",
-      "Passport-size Photographs of Directors",
-      "Address Proof of Directors (Utility Bill < 2 months)",
-      "Registered Office Premises Proof",
-      "Rent Agreement + NOC (if rented)",
+      "PAN & Aadhaar of all directors",
+      "Passport-size photographs",
+      "Address proof (utility bill < 2 mo)",
+      "Registered office proof",
+      "Rent agreement + NOC (if rented)",
       "Digital Signature Certificate (DSC)",
-      "MoA & AoA Drafts",
+      "MoA & AoA drafts",
     ];
   }
   if (title.includes("llp") || (serviceSlug && serviceSlug.includes("llp"))) {
     return [
-      "PAN Card of Designated Partners",
-      "Aadhaar Card / Photo ID of Partners",
-      "Passport-size Photographs of Partners",
-      "Address Proof of Partners (Utility Bill < 2 months)",
-      "Registered Office Premises Proof of LLP",
-      "Rent Agreement + NOC (if rented)",
-      "Digital Signature Certificate (DSC) of Partners",
-      "LLP Agreement Draft",
+      "PAN & Aadhaar of all partners",
+      "Passport-size photographs",
+      "Address proof (utility bill < 2 mo)",
+      "Registered office proof",
+      "Rent agreement + NOC (if rented)",
+      "Digital Signature Certificate (DSC)",
+      "LLP Agreement draft",
     ];
   }
   if (title.includes("gst")) {
