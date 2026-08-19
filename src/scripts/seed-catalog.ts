@@ -49,6 +49,7 @@ type SeedService = {
    * each type, so they are seeded inactive: still resolvable by slug, never listed.
    */
   active?: boolean;
+  wizardRules?: any;
 };
 
 type SeedGroup = { category: string; subcategory: string; services: SeedService[] };
