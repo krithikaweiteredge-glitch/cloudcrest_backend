@@ -109,6 +109,8 @@ export type McaFeeInput = {
   authorisedCapital: number;
   /** Used only for the no-share-capital (members) fee path. */
   members: number;
+  /** Number of directors — drives DIN application fee (₹500 each) and DSC (₹1,500 each). */
+  directors?: number;
   /** OPC or Small Company — unlocks the concessional MoA fee slab. */
   opcSmall: boolean;
   section8: boolean;
@@ -185,10 +187,16 @@ export function computeMcaStatutoryFees(input: McaFeeInput): McaStatutoryResult 
   const stampAoa = cat ? Math.round(typeof cat.aoa === "function" ? cat.aoa(input.authorisedCapital) : cat.aoa) : 0;
   const spiceB = row ? row.spiceB : 0;
 
+  const numDir = Math.max(1, input.directors ?? 2);
+  const dinFee = 500 * numDir; // ₹500 per director (DIN Application Fee)
+  const dscFee = 1500 * numDir; // ₹1,500 per director (DSC, 2-yr validity)
+
   const lines: StatutoryLine[] = [
     { label: "MoA Registration Fee", amount: moaRegistrationFee(input) },
     { label: "AoA Registration Fee", amount: aoaRegistrationFee(input) },
     { label: "PAN & TAN Fee", amount: PAN_TAN_FEE },
+    { label: "DIN Application Fee", amount: dinFee },
+    { label: "Digital Signature Certificate (DSC)", amount: dscFee },
     { label: "Stamp Duty — MoA", amount: stampMoa },
     { label: "Stamp Duty — AoA", amount: stampAoa },
     { label: "Stamp Duty — SPICe+ Part B", amount: spiceB },
@@ -210,11 +218,18 @@ export function fillipFee(contribution: number): number {
   return 25000;
 }
 
-export function computeLlpStatutoryFees(contribution: number): { lines: StatutoryLine[]; total: number } {
+export function computeLlpStatutoryFees(
+  contribution: number,
+  partners: number = 2
+): { lines: StatutoryLine[]; total: number } {
+  const numPartners = Math.max(1, partners);
+  const dscFee = 1500 * numPartners; // ₹1,500 per partner (DSC, 2-yr validity)
+
   const lines: StatutoryLine[] = [
     { label: "FiLLiP Filing Fee", amount: fillipFee(contribution) },
     { label: "Name Reservation (RUN-LLP)", amount: 200 },
     { label: "PAN & TAN Fee", amount: PAN_TAN_FEE },
+    { label: "Digital Signature Certificate (DSC)", amount: dscFee },
   ];
   return { lines, total: lines.reduce((s, l) => s + l.amount, 0) };
 }
@@ -276,12 +291,16 @@ export type CompanyFeeContext = {
   paidCapital: number;
   /** Number of members — used only on the no-share-capital (guarantee) path. */
   members?: number;
+  /** Number of directors — drives DIN application fee (₹500 each) and DSC (₹1,500 each). */
+  directors?: number;
   state: string;
 };
 
 export type LlpFeeContext = {
   kind: "llp";
   contribution: number;
+  /** Number of partners — drives DSC fee (₹1,500 each). */
+  partners?: number;
   /** Indian LLP (FiLLiP) vs Foreign LLP (FC) — selects the per-type catalog row. */
   jurisdiction?: "indian" | "foreign";
 };
@@ -321,7 +340,7 @@ export function computeFees(
   customLines?: StatutoryLine[],
 ): ComputedFees {
   if (ctx.kind === "llp") {
-    const s = computeLlpStatutoryFees(ctx.contribution);
+    const s = computeLlpStatutoryFees(ctx.contribution, ctx.partners);
     return { ...withProfessionalAndGst(professionalFee, s.lines, customLines), stateKnown: true };
   }
   const opcSmall = deriveOpcSmall(ctx);
@@ -332,6 +351,7 @@ export function computeFees(
     hasCapital,
     authorisedCapital: hasCapital ? ctx.capital : 0,
     members: ctx.members ?? 0,
+    directors: ctx.directors ?? (ctx.entity === "opc" ? 1 : 2),
     opcSmall,
     section8: ctx.entity === "sec8",
     state: ctx.state,
@@ -352,7 +372,9 @@ export function parseFeeContext(raw: any): FeeContext | null {
     // Jurisdiction only selects the professional-fee row (Indian vs Foreign); the
     // statutory formula is the same for both. Default to Indian.
     const jurisdiction = raw.jurisdiction === "foreign" ? "foreign" : "indian";
-    return { kind: "llp", contribution, jurisdiction };
+    let partners = Number(raw.partners ?? raw.directors);
+    if (!Number.isFinite(partners) || partners <= 0) partners = 2;
+    return { kind: "llp", contribution, jurisdiction, partners: Math.floor(partners) };
   }
   if (raw.kind === "company") {
     const capital = Number(raw.capital);
@@ -366,6 +388,10 @@ export function parseFeeContext(raw: any): FeeContext | null {
     const liability = raw.liability === "guarantee" ? "guarantee" : raw.liability === "shares" ? "shares" : null;
     let members = Number(raw.members);
     if (!Number.isFinite(members) || members < 0) members = 0;
+    let directors = Number(raw.directors);
+    if (!Number.isFinite(directors) || directors <= 0) {
+      directors = raw.entity === "opc" ? 1 : raw.entity === "public" ? 3 : 2;
+    }
     return {
       kind: "company",
       entity: typeof raw.entity === "string" ? raw.entity : "",
@@ -374,6 +400,7 @@ export function parseFeeContext(raw: any): FeeContext | null {
       capital,
       paidCapital,
       members: Math.floor(members),
+      directors: Math.floor(directors),
       state: typeof raw.state === "string" ? raw.state : "",
     };
   }
