@@ -1,0 +1,2 @@
+# Generated intermediate data files — rebuild with the parser scripts, don't commit.
+*.csv
