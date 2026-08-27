@@ -235,14 +235,15 @@ const SOCIETY_COMBOS: SeedService[] = SOCIETY_TYPES.flatMap((t) =>
 // State-wise entity registrations — Partnership, Trust, HUF and Sole
 // Proprietorship are registered STATE-WISE exactly the way societies are (see
 // SOCIETY_* above). The wizard picks the entity (and, for partnership, its
-// Registered / Unregistered type) AND a state, and every combination has its own
+// Registered / Unregistered type; for trust, its Private / Public type) AND a
+// state, and every combination has its own
 // who-can-apply, fee, documents and tabs. Each combination is therefore its own
 // inactive row (slug `<base>-<state>`), resolved by the wizard and authored per
 // state by the admin. Structure only — no content is seeded (so re-running never
 // clobbers the admin's per-state work), identical to SOCIETY_COMBOS.
 //
-// One row per state for a given base slug (a type row for partnership, the base
-// entity row otherwise). `shortPrefix` keeps the entity in the short title so it
+// One row per state for a given base slug (a type row for partnership and trust,
+// the base entity row otherwise). `shortPrefix` keeps the entity in the short title so it
 // stays searchable; the row name is just the state, so it reads as a state step
 // nested under its parent in the admin tree.
 const stateCombos = (
@@ -390,20 +391,56 @@ const CATALOG: SeedGroup[] = [
       ]),
       // New addition — Sole Proprietorship. (The base `trust` row lives in this
       // subcategory too, still admin-managed and intentionally not seeded here so
-      // its content is never clobbered — only its per-state rows are seeded below.)
+      // its content is never clobbered — only its type / per-state rows are seeded
+      // below.)
       min("sole-proprietorship", "Sole Proprietorship", "Proprietorship", "—", "Store"),
+      // Trust type rows — like Partnership, a trust is first chosen as Private or
+      // Public, and only then a state. Both are inactive (they are wizard steps,
+      // never sidebar entries) and act as the fallback when a (type × state) row
+      // isn't authored yet.
+      {
+        ...svc("trust-private", "Private Trust", "Private Trust", "Sub-Registrar", "Trust Deed", "Shield", [
+          "PAN & Aadhaar of settlor and all trustees",
+          "Passport-size photographs of settlor and trustees",
+          "Trust deed executed on stamp paper",
+          "Proof of registered office of the trust",
+          "Rent agreement + NOC from owner (if rented)",
+          "Two witnesses with ID proof",
+        ]),
+        active: false,
+        description: "A private trust is created under the Indian Trusts Act, 1882 for the benefit of specific, identifiable beneficiaries — typically family members. The trust deed is executed on stamp paper and registered with the Sub-Registrar.",
+        whoCanApply: "• A settlor competent to contract who wishes to set aside property for named beneficiaries.\n• Families planning succession or providing for dependants.\n• Trusts whose beneficiaries are a defined, closed group.",
+        wizardRules: JSON.stringify({ tags: ["Indian Trusts Act, 1882", "Named Beneficiaries"] }),
+      },
+      {
+        ...svc("trust-public", "Public Trust", "Public Trust", "Charity Commissioner", "Trust Deed", "Shield", [
+          "PAN & Aadhaar of settlor and all trustees",
+          "Passport-size photographs of settlor and trustees",
+          "Trust deed executed on stamp paper",
+          "Proof of registered office of the trust",
+          "Rent agreement + NOC from owner (if rented)",
+          "Objects / activity note of the trust",
+          "Two witnesses with ID proof",
+        ]),
+        active: false,
+        description: "A public trust is created for a charitable or religious purpose benefiting the public at large, and is registered with the state Charity Commissioner (or equivalent authority). It is the usual structure for NGOs seeking 12A / 80G recognition.",
+        whoCanApply: "• Founders setting up a charitable, educational, medical or religious trust.\n• NGOs that intend to apply for 12A / 80G registration.\n• Trusts whose beneficiaries are the general public or a section of it.",
+        wizardRules: JSON.stringify({ tags: ["Charitable / Religious", "12A & 80G Ready"] }),
+      },
       // Society: the base row + three type fallbacks, then one row per (type ×
       // state) combination. See the SOCIETY_* definitions above for the rationale.
       ...SOCIETY_TYPE_ROWS,
       ...SOCIETY_COMBOS,
       // Per-state rows for the other state-wise entities (same pattern as Society).
-      // Partnership nests under its Registered / Unregistered type rows; HUF, Sole
-      // Proprietorship and Trust nest directly under their base entity row.
+      // Partnership nests under its Registered / Unregistered type rows and Trust
+      // under its Private / Public type rows; HUF and Sole Proprietorship nest
+      // directly under their base entity row.
       ...stateCombos("partnership-registered", "Registered", "Registrar of Firms", "Users"),
       ...stateCombos("partnership-unregistered", "Unregistered", "Partnership Deed", "Users"),
       ...stateCombos("huf", "HUF", "Income Tax", "HomeIcon"),
       ...stateCombos("sole-proprietorship", "Proprietorship", "—", "Store"),
-      ...stateCombos("trust", "Trust", "Charity Commissioner", "Shield"),
+      ...stateCombos("trust-private", "Private Trust", "Sub-Registrar", "Shield"),
+      ...stateCombos("trust-public", "Public Trust", "Charity Commissioner", "Shield"),
     ],
   },
   {
