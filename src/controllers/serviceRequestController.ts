@@ -122,22 +122,6 @@ export async function createServiceRequest(req: AuthenticatedRequest, res: Respo
 }
 
 // 2. LIST SERVICE REQUESTS FOR LOGGED IN USER
-export async function listServiceRequests(req: AuthenticatedRequest, res: Response) {
-  try {
-    const userId = req.user!.id;
-    const userEmail = req.user!.email;
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
-
-    let whereCondition = userEmail
-      ? or(eq(serviceRequests.userId, userId), eq(serviceRequests.contactEmail, userEmail))
-      : eq(serviceRequests.userId, userId);
-
-    let query = db
-      .select()
-      .from(serviceRequests)
-      .where(whereCondition)
-      .orderBy(desc(serviceRequests.createdAt));
-
 /** Helper to resolve required document types for a service request from the database catalog. */
 async function resolveRequiredDocsForRequest(serviceSlug: string, serviceTitle: string): Promise<string[]> {
   try {
@@ -209,6 +193,23 @@ async function resolveRequiredDocsForRequest(serviceSlug: string, serviceTitle: 
     "Business Registration Proof",
   ];
 }
+
+// 2. LIST ALL SERVICE REQUESTS FOR LOGGED IN USER
+export async function listServiceRequests(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user!.id;
+    const userEmail = req.user!.email;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+
+    let whereCondition = userEmail
+      ? or(eq(serviceRequests.userId, userId), eq(serviceRequests.contactEmail, userEmail))
+      : eq(serviceRequests.userId, userId);
+
+    let query = db
+      .select()
+      .from(serviceRequests)
+      .where(whereCondition)
+      .orderBy(desc(serviceRequests.createdAt));
 
     if (limit && !isNaN(limit)) {
       query = query.limit(limit) as any;
