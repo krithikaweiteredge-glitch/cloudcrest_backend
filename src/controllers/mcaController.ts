@@ -104,46 +104,10 @@ export async function checkNameAvailability(req: Request, res: Response) {
       });
     }
 
-    // Does a company with this name already exist in the MCA registry? Look up the
-    // brand key (name without its legal suffix) in the local index. Any hit means
-    // the brand is already taken — regardless of the Private Limited / LLP / Limited
-    // suffix the applicant chose.
     const core = coreKey(trimmedName);
 
-    const rows = core
-      ? await db
-          .select({
-            name: mcaCompanies.name,
-            kind: mcaCompanies.kind,
-            klass: mcaCompanies.klass,
-            companyType: mcaCompanies.companyType,
-            identifier: mcaCompanies.identifier,
-            regDate: mcaCompanies.regDate,
-          })
-          .from(mcaCompanies)
-          .where(eq(mcaCompanies.coreNorm, core))
-          .limit(5)
-      : [];
-
-    if (rows.length > 0) {
-      // Distinguish an exact-name collision from a same-brand collision for a
-      // clearer message, but both make the proposed name unavailable.
-      const wantedFull = normalizeName(trimmedName);
-      const exact = rows.find((r) => normalizeName(r.name) === wantedFull);
-      const reason = exact
-        ? `“${trimmedName}” is already registered with the MCA: ${exact.name}.`
-        : `“${trimmedName}” is not available — a company already uses this name: ${rows[0].name}.`;
-      return res.status(200).json({
-        available: false,
-        reason,
-        matches: rows.map(toMatch),
-        source: "mca",
-      });
-    }
-
-    // Not in the active registry — is it a struck-off name? A struck-off company
-    // can be restored within 20 years (Companies Act s.252), so its name is still
-    // restricted for reuse. Report it unavailable with a struck-off note.
+    // Check if the name exists in the struck-off list FIRST. Struck-off entities can be
+    // restored within 20 years (Companies Act s.252), so their names stay restricted.
     const struck = core
       ? await db
           .select({
@@ -166,10 +130,41 @@ export async function checkNameAvailability(req: Request, res: Response) {
           `so this name is not available.`,
         matches: struck.map((r) => ({
           name: r.name,
-          industry: `Struck off${r.kind === "llp" ? " · LLP" : ""}`,
+          industry: `Struck off · ${r.kind === "llp" ? "LLP" : "Company"}`,
           location: [r.identifier, r.month].filter(Boolean).join(" · ") || undefined,
         })),
         source: "mca-struck-off",
+      });
+    }
+
+    // Does a company with this name already exist in the active MCA registry? Look up the
+    // brand key (name without its legal suffix) in the local index.
+    const rows = core
+      ? await db
+          .select({
+            name: mcaCompanies.name,
+            kind: mcaCompanies.kind,
+            klass: mcaCompanies.klass,
+            companyType: mcaCompanies.companyType,
+            identifier: mcaCompanies.identifier,
+            regDate: mcaCompanies.regDate,
+          })
+          .from(mcaCompanies)
+          .where(eq(mcaCompanies.coreNorm, core))
+          .limit(5)
+      : [];
+
+    if (rows.length > 0) {
+      const wantedFull = normalizeName(trimmedName);
+      const exact = rows.find((r) => normalizeName(r.name) === wantedFull);
+      const reason = exact
+        ? `“${trimmedName}” is already registered with the MCA: ${exact.name}.`
+        : `“${trimmedName}” is not available — a company already uses this name: ${rows[0].name}.`;
+      return res.status(200).json({
+        available: false,
+        reason,
+        matches: rows.map(toMatch),
+        source: "mca",
       });
     }
 
@@ -188,22 +183,18 @@ export async function checkNameAvailability(req: Request, res: Response) {
 }
 
 // 1b. SIMILAR EXISTING NAMES — live "as you type" suggestions of already-registered
-// companies whose brand begins with what the applicant has typed. Powers the home
-// search's "similar existing companies" preview so the user can pick a distinctive
-// name. Uses the same brand key + index as the availability check (a prefix scan,
-// fast under the DB's C collation).
+// companies & LLPs (including struck-off entities) whose brand begins with what the
+// applicant has typed. Powers the home search's "similar existing companies" preview.
 export async function getSimilarNames(req: Request, res: Response) {
   try {
     const q = String(req.query.q ?? "").trim();
     const core = coreKey(q);
-    // Need a couple of characters before a prefix scan is meaningful.
-    if (core.length < 2) return res.status(200).json({ matches: [] });
+    const minLen = Math.min(q.length, core.length);
+    if (minLen < 2) return res.status(200).json({ matches: [] });
 
-    // Restrict to the entity type chosen in the dropdown, so a Private Limited
-    // search only surfaces private companies, LLP only LLPs, and Limited only
-    // public companies. Class data is messy, so `public` = class matches "publ"
-    // and `private` = every other Indian company (OPC variants included).
     const type = String(req.query.type ?? "").toLowerCase();
+
+    // 1. Query Active MCA Companies
     const conds: SQL[] = [like(mcaCompanies.coreNorm, `${core}%`)];
     if (type === "llp") {
       conds.push(eq(mcaCompanies.kind, "llp"));
@@ -215,7 +206,7 @@ export async function getSimilarNames(req: Request, res: Response) {
       conds.push(sql`(${mcaCompanies.klass} IS NULL OR ${mcaCompanies.klass} !~* 'publ')`);
     }
 
-    const rows = await db
+    const activeRows = await db
       .select({
         name: mcaCompanies.name,
         kind: mcaCompanies.kind,
@@ -226,11 +217,50 @@ export async function getSimilarNames(req: Request, res: Response) {
       })
       .from(mcaCompanies)
       .where(and(...conds))
-      // Shortest brands first — the closest matches to what was typed.
       .orderBy(sql`length(${mcaCompanies.coreNorm})`)
       .limit(6);
 
-    return res.status(200).json({ matches: rows.map(toMatch) });
+    const activeMatches = activeRows.map(toMatch);
+
+    // 2. Query Struck-Off Companies & LLPs
+    const struckConds: SQL[] = [like(mcaStruckOff.coreNorm, `${core}%`)];
+    if (type === "llp") {
+      struckConds.push(eq(mcaStruckOff.kind, "llp"));
+    } else {
+      struckConds.push(eq(mcaStruckOff.kind, "company"));
+    }
+
+    const struckRows = await db
+      .select({
+        name: mcaStruckOff.name,
+        kind: mcaStruckOff.kind,
+        identifier: mcaStruckOff.identifier,
+        month: mcaStruckOff.month,
+      })
+      .from(mcaStruckOff)
+      .where(and(...struckConds))
+      .orderBy(sql`length(${mcaStruckOff.coreNorm})`)
+      .limit(6);
+
+    const struckMatches: CompanyMatch[] = struckRows.map((r) => ({
+      name: r.name,
+      industry: `Struck off · ${r.kind === "llp" ? "LLP" : "Company"}`,
+      location: [r.identifier, r.month].filter(Boolean).join(" · ") || undefined,
+    }));
+
+    // Combine active and struck-off matches, eliminating duplicate names if any
+    const seenNames = new Set<string>();
+    const combined: CompanyMatch[] = [];
+
+    for (const m of [...activeMatches, ...struckMatches]) {
+      const norm = normalizeName(m.name);
+      if (!seenNames.has(norm)) {
+        seenNames.add(norm);
+        combined.push(m);
+      }
+    }
+
+    return res.status(200).json({ matches: combined.slice(0, 8) });
   } catch (error: any) {
     console.error("MCA similar-names error:", error);
     return res.status(500).json({ error: "Failed to fetch similar names" });
