@@ -148,12 +148,16 @@ export async function checkNameAvailability(req: Request, res: Response) {
           `so this name is not available.`,
         matches: struck.map((r) => ({
           name: r.name,
-          industry: `Struck off · ${r.kind === "llp" ? "LLP" : "Company"}`,
+          identifier: r.identifier || undefined,
+          industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
           location: [r.identifier, r.month].filter(Boolean).join(" · ") || undefined,
+          companyStatus: "Strike Off",
+          status: "Strike Off",
         })),
         source: "mca-struck-off",
       });
     }
+
 
     // Does a company with this name already exist in the active MCA registry? Look up the
     // brand key (name without its legal suffix) in the local index.
@@ -274,9 +278,13 @@ export async function getSimilarNames(req: Request, res: Response) {
 
     const struckMatches: CompanyMatch[] = struckRows.map((r) => ({
       name: r.name,
-      industry: `Struck off · ${r.kind === "llp" ? "LLP" : "Company"}`,
+      identifier: r.identifier || undefined,
+      industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
       location: [r.identifier, r.month].filter(Boolean).join(" · ") || undefined,
+      companyStatus: "Strike Off",
+      status: "Strike Off",
     }));
+
 
     // Combine active and struck-off matches, eliminating duplicate names if any
     const seenNames = new Set<string>();
