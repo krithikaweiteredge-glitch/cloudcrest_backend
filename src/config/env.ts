@@ -46,4 +46,5 @@ export const env = {
     .split(",")
     .map((o) => o.trim().replace(/\/+$/, ""))
     .filter(Boolean),
+  dataGovInApiKey: process.env.DATA_GOV_IN_API_KEY || "579b464db66ec23bdd000001a91a7460df0043556c9016c8b7c96dc5",
 };

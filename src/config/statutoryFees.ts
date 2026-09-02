@@ -241,13 +241,13 @@ export function computeLlpStatutoryFees(
 export type CombinedFees = {
   lines: StatutoryLine[];
   total: number;
-  /** GST is 18% of the whole pre-GST total (professional + statutory). */
+  /** GST is 18% of the professional fee (statutory fees are exempt from GST). */
   gst: number;
 };
 
 /**
  * Build the full fee stack: professional fee (if any), the itemised statutory
- * fees, then a single GST line at 18% of everything above it.
+ * fees, and a single GST line at 18% of the professional fee only.
  */
 export function withProfessionalAndGst(
   professional: number,
@@ -255,17 +255,29 @@ export function withProfessionalAndGst(
   customLines?: StatutoryLine[],
 ): CombinedFees {
   const lines: StatutoryLine[] = [];
+  let taxableProfessionalAmount = 0;
+
   if (customLines && customLines.length > 0) {
-    lines.push(...customLines.filter((l) => l.label && l.amount > 0));
+    const validCustom = customLines.filter((l) => l.label && l.amount > 0);
+    lines.push(...validCustom);
+    taxableProfessionalAmount = validCustom.reduce((s, l) => s + l.amount, 0);
   } else if (professional > 0) {
     lines.push({ label: "Professional Fee", amount: professional });
+    taxableProfessionalAmount = professional;
   }
+
   lines.push(...statutory);
-  const preGst = lines.reduce((s, l) => s + l.amount, 0);
-  const gst = Math.round((preGst * GST_RATE) / 100);
-  lines.push({ label: `GST @ ${GST_RATE}%`, amount: gst });
-  return { lines, total: preGst + gst, gst };
+
+  const nonGstTotal = lines.reduce((s, l) => s + l.amount, 0);
+  const gst = Math.round((taxableProfessionalAmount * GST_RATE) / 100);
+
+  if (gst > 0) {
+    lines.push({ label: `GST @ ${GST_RATE}%`, amount: gst });
+  }
+
+  return { lines, total: nonGstTotal + gst, gst };
 }
+
 
 /* ------------------------------------------------------------------ *
  * Fee context — the minimal, authoritative set of inputs the fee for a

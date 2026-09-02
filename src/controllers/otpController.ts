@@ -4,6 +4,7 @@ import { otps, users, roles, businesses } from "../models/schema.js";
 import { eq, and, gt } from "drizzle-orm";
 import { sendOtpEmail } from "../utils/email.js";
 import { createSessionToken } from "../utils/auth.js";
+import { fetchMcaGovData } from "./mcaController.js";
 
 // 1. SEND EMAIL OTP
 export async function sendOtp(req: Request, res: Response) {
@@ -98,7 +99,16 @@ export async function verifyOtp(req: Request, res: Response) {
     }
 
     const isNewUser = userList.length === 0;
-    const { isBusiness, companyName, pan, cin, address, gstin } = req.body;
+    const { isBusiness, companyName, pan, cin, address, gstin, state, pincode, incorporationDate } = req.body;
+
+    let enrichedGovData: any = null;
+    if (isBusiness && cin && typeof cin === "string" && cin.trim().length >= 10) {
+      try {
+        enrichedGovData = await fetchMcaGovData(cin.trim().toUpperCase());
+      } catch {
+        // Fallback gracefully if government API is unavailable
+      }
+    }
 
     // Create the account and, for business sign-ups, its company profile in a
     // single transaction so a failure can never leave a user without the
@@ -137,14 +147,30 @@ export async function verifyOtp(req: Request, res: Response) {
           .where(eq(businesses.customerId, account.id))
           .limit(1);
 
+        const resolvedName =
+          (companyName || "").trim() ||
+          enrichedGovData?.name ||
+          `${account.firstName}'s Business`;
+        const resolvedAddress = (address || "").trim() || enrichedGovData?.address || "";
+        const resolvedState = (state || "").trim() || enrichedGovData?.state || undefined;
+        const resolvedPincode = (pincode || "").trim() || enrichedGovData?.pincode || undefined;
+        const resolvedIncorporationDate =
+          incorporationDate || enrichedGovData?.incorporationDate || undefined;
+        const resolvedEntityType = enrichedGovData?.entityType || undefined;
+
         const businessData = {
           customerId: account.id,
-          businessName: (companyName || "").trim() || `${account.firstName}'s Business`,
-          legalName: (companyName || "").trim(),
-          pan: (pan || "").trim(),
-          cin: (cin || "").trim(),
-          address: (address || "").trim(),
-          gstin: (gstin || "").trim(),
+          businessName: resolvedName,
+          legalName: (companyName || "").trim() || enrichedGovData?.name || resolvedName,
+          pan: (pan || "").trim().toUpperCase(),
+          cin: (cin || "").trim().toUpperCase(),
+          address: resolvedAddress,
+          postalAddress: resolvedAddress,
+          state: resolvedState,
+          pincode: resolvedPincode,
+          incorporationDate: resolvedIncorporationDate,
+          entityType: resolvedEntityType,
+          gstin: (gstin || "").trim().toUpperCase(),
           status: "active",
         };
 
@@ -157,6 +183,7 @@ export async function verifyOtp(req: Request, res: Response) {
 
       return account;
     });
+
 
     // Sign session token
     const token = await createSessionToken({
