@@ -205,8 +205,19 @@ export async function getSimilarNames(req: Request, res: Response) {
     const minLen = Math.min(q.length, core.length);
     if (minLen < 2) return res.status(200).json({ matches: [] });
 
-    // 1. Query Active MCA Companies (across all entity types: Private, Public, OPC, LLP)
+    const type = String(req.query.type ?? "").toLowerCase();
+
+    // 1. Query Active MCA Companies filtered by selected entity structure
     const conds: SQL[] = [like(mcaCompanies.coreNorm, `${core}%`)];
+    if (type === "llp") {
+      conds.push(eq(mcaCompanies.kind, "llp"));
+    } else if (type === "public" || type === "limited") {
+      conds.push(eq(mcaCompanies.kind, "indian"));
+      conds.push(sql`${mcaCompanies.klass} ~* 'publ'`);
+    } else if (type === "private") {
+      conds.push(eq(mcaCompanies.kind, "indian"));
+      conds.push(sql`(${mcaCompanies.klass} IS NULL OR ${mcaCompanies.klass} !~* 'publ')`);
+    }
 
     const activeRows = await db
       .select({
@@ -224,8 +235,13 @@ export async function getSimilarNames(req: Request, res: Response) {
 
     const activeMatches = activeRows.map(toMatch);
 
-    // 2. Query Struck-Off Entities (both Companies and LLPs)
+    // 2. Query Struck-Off Entities filtered by entity type
     const struckConds: SQL[] = [like(mcaStruckOff.coreNorm, `${core}%`)];
+    if (type === "llp") {
+      struckConds.push(eq(mcaStruckOff.kind, "llp"));
+    } else if (type === "private" || type === "public" || type === "limited") {
+      struckConds.push(eq(mcaStruckOff.kind, "company"));
+    }
 
     const struckRows = await db
       .select({
@@ -238,7 +254,6 @@ export async function getSimilarNames(req: Request, res: Response) {
       .where(and(...struckConds))
       .orderBy(sql`length(${mcaStruckOff.coreNorm})`)
       .limit(6);
-
 
     const struckMatches: CompanyMatch[] = struckRows.map((r) => ({
       name: r.name,
@@ -262,9 +277,18 @@ export async function getSimilarNames(req: Request, res: Response) {
     if (combined.length < 6 && q.length >= 3) {
       try {
         const govMatch = await fetchMcaGovDataByName(q);
-        if (govMatch && !seenNames.has(normalizeName(govMatch.name))) {
-          seenNames.add(normalizeName(govMatch.name));
-          combined.unshift(govMatch);
+        if (govMatch) {
+          const isLlp = /\bllp\b/i.test(govMatch.name) || /llp/i.test(govMatch.industry || "");
+          const isMatchForType =
+            (type === "llp" && isLlp) ||
+            (type === "private" && !isLlp) ||
+            (type === "public" && /public/i.test(govMatch.industry || "")) ||
+            !type;
+
+          if (isMatchForType && !seenNames.has(normalizeName(govMatch.name))) {
+            seenNames.add(normalizeName(govMatch.name));
+            combined.unshift(govMatch);
+          }
         }
       } catch {
         // ignore
@@ -277,6 +301,7 @@ export async function getSimilarNames(req: Request, res: Response) {
     return res.status(500).json({ error: "Failed to fetch similar names" });
   }
 }
+
 
 
 /**
