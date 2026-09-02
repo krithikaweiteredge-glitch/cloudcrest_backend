@@ -5,7 +5,16 @@ import { businesses, mcaCompanies, mcaStruckOff } from "../models/schema.js";
 import { and, eq, like, sql, type SQL } from "drizzle-orm";
 
 /** A company match returned to the client. */
-type CompanyMatch = { id?: number; name: string; domain?: string; industry?: string; location?: string };
+type CompanyMatch = {
+  id?: number;
+  name: string;
+  domain?: string;
+  industry?: string;
+  location?: string;
+  status?: string;
+  companyStatus?: string;
+  identifier?: string;
+};
 
 /** Collapse a name to a comparable key (lowercase, alphanumerics only). */
 const normalizeName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -66,8 +75,16 @@ function toIsoDate(d: string | null): string | null {
 function toMatch(r: { name: string; kind: string; klass: string | null; companyType: string | null; identifier: string | null; regDate: string | null }): CompanyMatch {
   const industry = [r.klass, r.companyType].filter(Boolean).join(" · ") || undefined;
   const location = r.identifier ? `${r.identifier}${r.regDate ? ` · ${r.regDate}` : ""}` : r.regDate || undefined;
-  return { name: r.name, industry, location };
+  return {
+    name: r.name,
+    industry,
+    location,
+    identifier: r.identifier || undefined,
+    companyStatus: "Active",
+    status: "Active",
+  };
 }
+
 
 // 1. MCA NAME AVAILABILITY CHECKER — answered from the local MCA registry index.
 export async function checkNameAvailability(req: Request, res: Response) {
@@ -422,6 +439,8 @@ export async function fetchMcaGovDataByName(companyName: string) {
           identifier: rec.CIN,
           industry: [rec.CompanyClass, rec.CompanyCategory].filter(Boolean).join(" · ") || undefined,
           location: rec.Registered_Office_Address || undefined,
+          companyStatus: rec.CompanyStatus || undefined,
+          status: rec.CompanyStatus || undefined,
           source: "data.gov.in",
         };
       }
@@ -430,6 +449,7 @@ export async function fetchMcaGovDataByName(companyName: string) {
     }
     return null;
   };
+
 
   try {
     const results = await Promise.all(candidateList.map((c) => fetchCandidate(c)));
