@@ -273,12 +273,26 @@ export async function getSimilarNames(req: Request, res: Response) {
       }
     }
 
+    // If few or no results found locally and user typed a substantive name, check data.gov.in API
+    if (combined.length < 6 && q.length >= 3) {
+      try {
+        const govMatch = await fetchMcaGovDataByName(q);
+        if (govMatch && !seenNames.has(normalizeName(govMatch.name))) {
+          seenNames.add(normalizeName(govMatch.name));
+          combined.unshift(govMatch);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     return res.status(200).json({ matches: combined.slice(0, 8) });
   } catch (error: any) {
     console.error("MCA similar-names error:", error);
     return res.status(500).json({ error: "Failed to fetch similar names" });
   }
 }
+
 
 /**
  * Fetch company master data directly from the official data.gov.in RoC Company Master Data API.
