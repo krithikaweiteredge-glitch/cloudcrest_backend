@@ -169,7 +169,18 @@ export async function checkNameAvailability(req: Request, res: Response) {
       });
     }
 
-    // No collision in the active registry or struck-off list — appears available.
+    // Secondary verification check against data.gov.in API for the exact legal name
+    const govMatch = await fetchMcaGovDataByName(trimmedName);
+    if (govMatch) {
+      return res.status(200).json({
+        available: false,
+        reason: `“${trimmedName}” is already registered with the MCA: ${govMatch.name}.`,
+        matches: [govMatch],
+        source: "data.gov.in",
+      });
+    }
+
+    // No collision in the active registry, struck-off list, or government API — appears available.
     return res.status(200).json({
       available: true,
       message: `“${trimmedName}” appears to be available.`,
@@ -178,6 +189,7 @@ export async function checkNameAvailability(req: Request, res: Response) {
   } catch (error: any) {
     console.error("MCA name check error:", error);
     return res.status(500).json({
+
       error: "Failed to process MCA name check",
     });
   }
@@ -323,6 +335,44 @@ export async function fetchMcaGovData(cin: string) {
   }
   return null;
 }
+
+/**
+ * Check exact company name against data.gov.in API as a secondary verification check.
+ */
+export async function fetchMcaGovDataByName(companyName: string) {
+  const apiKey = env.dataGovInApiKey;
+  if (!apiKey || !companyName || companyName.trim().length < 3) return null;
+
+  try {
+    const url = `https://api.data.gov.in/resource/4dbe5667-7b6b-41d7-82af-211562424d9a?api-key=${encodeURIComponent(
+      apiKey
+    )}&format=json&filters%5BCompanyName%5D=${encodeURIComponent(companyName.trim())}&limit=1`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!resp.ok) return null;
+    const data = await resp.json();
+
+    if (data?.records && Array.isArray(data.records) && data.records.length > 0) {
+      const rec = data.records[0];
+      return {
+        name: rec.CompanyName,
+        identifier: rec.CIN,
+        industry: [rec.CompanyClass, rec.CompanyCategory].filter(Boolean).join(" · ") || undefined,
+        location: rec.Registered_Office_Address || undefined,
+        source: "data.gov.in",
+      };
+    }
+  } catch (err: any) {
+    console.warn("data.gov.in name-check lookup warning:", err?.message || err);
+  }
+  return null;
+}
+
 
 // 2. MCA CIN LOOKUP (Hybrid: Database + data.gov.in RoC Master Data)
 export async function getCompanyDetails(req: Request, res: Response) {
