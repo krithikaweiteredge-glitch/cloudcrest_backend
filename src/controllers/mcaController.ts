@@ -205,19 +205,8 @@ export async function getSimilarNames(req: Request, res: Response) {
     const minLen = Math.min(q.length, core.length);
     if (minLen < 2) return res.status(200).json({ matches: [] });
 
-    const type = String(req.query.type ?? "").toLowerCase();
-
-    // 1. Query Active MCA Companies
+    // 1. Query Active MCA Companies (across all entity types: Private, Public, OPC, LLP)
     const conds: SQL[] = [like(mcaCompanies.coreNorm, `${core}%`)];
-    if (type === "llp") {
-      conds.push(eq(mcaCompanies.kind, "llp"));
-    } else if (type === "public" || type === "limited") {
-      conds.push(eq(mcaCompanies.kind, "indian"));
-      conds.push(sql`${mcaCompanies.klass} ~* 'publ'`);
-    } else if (type === "private") {
-      conds.push(eq(mcaCompanies.kind, "indian"));
-      conds.push(sql`(${mcaCompanies.klass} IS NULL OR ${mcaCompanies.klass} !~* 'publ')`);
-    }
 
     const activeRows = await db
       .select({
@@ -235,13 +224,8 @@ export async function getSimilarNames(req: Request, res: Response) {
 
     const activeMatches = activeRows.map(toMatch);
 
-    // 2. Query Struck-Off Companies & LLPs
+    // 2. Query Struck-Off Entities (both Companies and LLPs)
     const struckConds: SQL[] = [like(mcaStruckOff.coreNorm, `${core}%`)];
-    if (type === "llp") {
-      struckConds.push(eq(mcaStruckOff.kind, "llp"));
-    } else {
-      struckConds.push(eq(mcaStruckOff.kind, "company"));
-    }
 
     const struckRows = await db
       .select({
@@ -254,6 +238,7 @@ export async function getSimilarNames(req: Request, res: Response) {
       .where(and(...struckConds))
       .orderBy(sql`length(${mcaStruckOff.coreNorm})`)
       .limit(6);
+
 
     const struckMatches: CompanyMatch[] = struckRows.map((r) => ({
       name: r.name,
@@ -350,42 +335,81 @@ export async function fetchMcaGovData(cin: string) {
   return null;
 }
 
+/** Strip corporate suffixes from a raw string to get the base brand name */
+function stripLegalSuffixes(name: string): string {
+  return name
+    .replace(/\b(\(?opc\)?\s*)?(private\s+limited|pvt\.?\s*ltd\.?|limited\s+liability\s+partnership|public\s+limited|company\s+limited|nidhi\s+limited|section\s*8|producer\s+company|limited|ltd\.?|llp|opc|pvt\.?)\b/gi, "")
+    .replace(/[(),]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
- * Check exact company name against data.gov.in API as a secondary verification check.
+ * Check company name against data.gov.in API by checking the exact string as well as
+ * common legal suffix variations (Private Limited, (OPC) Private Limited, Limited, LLP)
+ * in parallel.
  */
 export async function fetchMcaGovDataByName(companyName: string) {
   const apiKey = env.dataGovInApiKey;
   if (!apiKey || !companyName || companyName.trim().length < 3) return null;
 
-  try {
-    const url = `https://api.data.gov.in/resource/4dbe5667-7b6b-41d7-82af-211562424d9a?api-key=${encodeURIComponent(
-      apiKey
-    )}&format=json&filters%5BCompanyName%5D=${encodeURIComponent(companyName.trim())}&limit=1`;
+  const trimmed = companyName.trim();
+  const base = stripLegalSuffixes(trimmed);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-
-    const resp = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-
-    if (!resp.ok) return null;
-    const data = await resp.json();
-
-    if (data?.records && Array.isArray(data.records) && data.records.length > 0) {
-      const rec = data.records[0];
-      return {
-        name: rec.CompanyName,
-        identifier: rec.CIN,
-        industry: [rec.CompanyClass, rec.CompanyCategory].filter(Boolean).join(" · ") || undefined,
-        location: rec.Registered_Office_Address || undefined,
-        source: "data.gov.in",
-      };
-    }
-  } catch (err: any) {
-    console.warn("data.gov.in name-check lookup warning:", err?.message || err);
+  const candidateSet = new Set<string>();
+  candidateSet.add(trimmed);
+  if (base && base.length >= 3) {
+    candidateSet.add(`${base} PRIVATE LIMITED`);
+    candidateSet.add(`${base} (OPC) PRIVATE LIMITED`);
+    candidateSet.add(`${base} LIMITED`);
+    candidateSet.add(`${base} LLP`);
+    candidateSet.add(base);
   }
+
+  const candidateList = Array.from(candidateSet);
+
+  const fetchCandidate = async (candidate: string) => {
+    try {
+      const url = `https://api.data.gov.in/resource/4dbe5667-7b6b-41d7-82af-211562424d9a?api-key=${encodeURIComponent(
+        apiKey
+      )}&format=json&filters%5BCompanyName%5D=${encodeURIComponent(candidate)}&limit=1`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+
+      const resp = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!resp.ok) return null;
+      const data = await resp.json();
+
+      if (data?.records && Array.isArray(data.records) && data.records.length > 0) {
+        const rec = data.records[0];
+        return {
+          name: rec.CompanyName,
+          identifier: rec.CIN,
+          industry: [rec.CompanyClass, rec.CompanyCategory].filter(Boolean).join(" · ") || undefined,
+          location: rec.Registered_Office_Address || undefined,
+          source: "data.gov.in",
+        };
+      }
+    } catch {
+      // Ignore network abort/timeout
+    }
+    return null;
+  };
+
+  try {
+    const results = await Promise.all(candidateList.map((c) => fetchCandidate(c)));
+    const matched = results.find((r) => r !== null);
+    if (matched) return matched;
+  } catch (err: any) {
+    console.warn("data.gov.in parallel name-check warning:", err?.message || err);
+  }
+
   return null;
 }
+
 
 
 // 2. MCA CIN LOOKUP (Hybrid: Database + data.gov.in RoC Master Data)
