@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { db } from "../config/db.js";
+import { env } from "../config/env.js";
 import { businesses, mcaCompanies, mcaStruckOff } from "../models/schema.js";
 import { and, eq, like, sql, type SQL } from "drizzle-orm";
 
@@ -267,7 +268,63 @@ export async function getSimilarNames(req: Request, res: Response) {
   }
 }
 
-// 2. MCA CIN LOOKUP
+/**
+ * Fetch company master data directly from the official data.gov.in RoC Company Master Data API.
+ * Provides rich metadata including registered office address, paid-up/authorized capital,
+ * state code, and status.
+ */
+export async function fetchMcaGovData(cin: string) {
+  const apiKey = env.dataGovInApiKey;
+  if (!apiKey) return null;
+
+  try {
+    const url = `https://api.data.gov.in/resource/4dbe5667-7b6b-41d7-82af-211562424d9a?api-key=${encodeURIComponent(
+      apiKey
+    )}&format=json&filters%5BCIN%5D=${encodeURIComponent(cin)}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!resp.ok) return null;
+    const data = await resp.json();
+
+    if (data?.records && Array.isArray(data.records) && data.records.length > 0) {
+      const rec = data.records[0];
+      const address = (rec.Registered_Office_Address || "").trim();
+      const pinMatch = address.match(/\b(\d{6})\b/);
+      const pincode = pinMatch ? pinMatch[1] : undefined;
+
+      const isStruckOff = (rec.CompanyStatus || "").toLowerCase().includes("strike");
+
+      return {
+        cin: rec.CIN || cin,
+        name: rec.CompanyName,
+        entityType: rec.CompanyClass || rec.CompanyCategory || "Private Limited Company",
+        incorporationDate: toIsoDate(rec.CompanyRegistrationdate_date),
+        address,
+        postalAddress: address,
+        state: rec.CompanyStateCode || undefined,
+        pincode,
+        status: isStruckOff ? "struck_off" : "active",
+        companyStatus: rec.CompanyStatus || (isStruckOff ? "Strike Off" : "Active"),
+        authorizedCapital: rec.AuthorizedCapital,
+        paidUpCapital: rec.PaidupCapital,
+        roc: rec.CompanyROCcode,
+        nicCode: rec.nic_code,
+        industrialClassification: rec.CompanyIndustrialClassification,
+        source: "data.gov.in",
+      };
+    }
+  } catch (err: any) {
+    console.warn("data.gov.in MCA API lookup warning:", err?.message || err);
+  }
+  return null;
+}
+
+// 2. MCA CIN LOOKUP (Hybrid: Database + data.gov.in RoC Master Data)
 export async function getCompanyDetails(req: Request, res: Response) {
   try {
     const { cin } = req.body;
@@ -278,7 +335,7 @@ export async function getCompanyDetails(req: Request, res: Response) {
 
     const trimmedCin = cin.trim().toUpperCase();
 
-    // Lookup if it is an existing registered business in our database
+    // 1. Lookup if it is an existing registered business in our database
     const dbRecord = await db
       .select()
       .from(businesses)
@@ -301,27 +358,48 @@ export async function getCompanyDetails(req: Request, res: Response) {
           postalAddress: b.postalAddress || b.address,
           status: b.status,
           directors: b.directors,
+          source: "database",
         },
       });
     }
 
-    // Otherwise look the CIN/LLPIN up in the MCA registry index. We only hold the
-    // core fields (name, class, incorporation date) — address/directors aren't in
-    // the lean index, so they're returned empty and the form keeps its own values.
-    const mca = await db
-      .select({
-        identifier: mcaCompanies.identifier,
-        name: mcaCompanies.name,
-        kind: mcaCompanies.kind,
-        klass: mcaCompanies.klass,
-        regDate: mcaCompanies.regDate,
-      })
-      .from(mcaCompanies)
-      .where(eq(mcaCompanies.identifier, trimmedCin))
-      .limit(1);
+    // 2. Query government API and local index in parallel for maximum speed and data richness
+    const [govData, mcaRows, struckRows] = await Promise.all([
+      fetchMcaGovData(trimmedCin),
+      db
+        .select({
+          identifier: mcaCompanies.identifier,
+          name: mcaCompanies.name,
+          kind: mcaCompanies.kind,
+          klass: mcaCompanies.klass,
+          regDate: mcaCompanies.regDate,
+        })
+        .from(mcaCompanies)
+        .where(eq(mcaCompanies.identifier, trimmedCin))
+        .limit(1),
+      db
+        .select({
+          identifier: mcaStruckOff.identifier,
+          name: mcaStruckOff.name,
+          kind: mcaStruckOff.kind,
+          month: mcaStruckOff.month,
+        })
+        .from(mcaStruckOff)
+        .where(eq(mcaStruckOff.identifier, trimmedCin))
+        .limit(1),
+    ]);
 
-    if (mca.length > 0) {
-      const m = mca[0];
+    // If government API returned enriched data (Address, Capital, Date, etc.)
+    if (govData) {
+      return res.status(200).json({
+        found: true,
+        company: govData,
+      });
+    }
+
+    // Fallback to local active MCA index
+    if (mcaRows.length > 0) {
+      const m = mcaRows[0];
       return res.status(200).json({
         found: true,
         company: {
@@ -330,19 +408,14 @@ export async function getCompanyDetails(req: Request, res: Response) {
           entityType: mcaEntityType(m.kind, m.klass),
           incorporationDate: toIsoDate(m.regDate),
           status: "active",
+          source: "mca_local_index",
         },
       });
     }
 
-    // Struck-off entities are still looked up so the user learns the status.
-    const struck = await db
-      .select({ identifier: mcaStruckOff.identifier, name: mcaStruckOff.name, kind: mcaStruckOff.kind, month: mcaStruckOff.month })
-      .from(mcaStruckOff)
-      .where(eq(mcaStruckOff.identifier, trimmedCin))
-      .limit(1);
-
-    if (struck.length > 0) {
-      const s = struck[0];
+    // Fallback to local struck-off index
+    if (struckRows.length > 0) {
+      const s = struckRows[0];
       return res.status(200).json({
         found: true,
         company: {
@@ -351,14 +424,15 @@ export async function getCompanyDetails(req: Request, res: Response) {
           entityType: s.kind === "llp" ? "LLP" : "Company",
           status: "struck_off",
           struckOffMonth: s.month,
+          source: "mca_struck_off",
         },
       });
     }
 
-    // Not in our registration records or the MCA index.
+    // Not found
     return res.status(200).json({
       found: false,
-      message: "No company found for this CIN/LLPIN in the MCA registry index.",
+      message: "No company found for this CIN/LLPIN in the MCA registry.",
     });
   } catch (error: any) {
     console.error("MCA company lookup error:", error);
@@ -367,3 +441,4 @@ export async function getCompanyDetails(req: Request, res: Response) {
     });
   }
 }
+
