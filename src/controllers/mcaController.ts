@@ -383,15 +383,22 @@ export async function fetchMcaGovDataByName(companyName: string) {
 
   const candidateSet = new Set<string>();
   candidateSet.add(trimmed);
+  candidateSet.add(trimmed.toUpperCase());
   if (base && base.length >= 3) {
-    candidateSet.add(`${base} PRIVATE LIMITED`);
-    candidateSet.add(`${base} (OPC) PRIVATE LIMITED`);
-    candidateSet.add(`${base} LIMITED`);
-    candidateSet.add(`${base} LLP`);
-    candidateSet.add(base);
+    const uBase = base.toUpperCase();
+    candidateSet.add(`${uBase} PRIVATE LIMITED`);
+    candidateSet.add(`${uBase} (OPC) PRIVATE LIMITED`);
+    candidateSet.add(`${uBase} OPC PRIVATE LIMITED`);
+    candidateSet.add(`${uBase} (OPC) PVT LTD`);
+    candidateSet.add(`${uBase} LIMITED`);
+    candidateSet.add(`${uBase} LLP`);
+    candidateSet.add(uBase);
+    candidateSet.add(`${base} Private Limited`);
+    candidateSet.add(`${base} (OPC) Private Limited`);
   }
 
   const candidateList = Array.from(candidateSet);
+
 
   const fetchCandidate = async (candidate: string) => {
     try {
