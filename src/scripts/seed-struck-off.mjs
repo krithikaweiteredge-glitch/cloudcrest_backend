@@ -19,7 +19,13 @@ if (!csvPath || !fs.existsSync(csvPath)) {
 }
 
 const connectionString = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
-const client = new pg.Client({ connectionString, ssl: { rejectUnauthorized: false } });
+// Local/self-hosted Postgres speaks plain TCP; only managed providers need TLS.
+const isLocal = /(?:localhost|127\.0\.0\.1)/.test(connectionString);
+const useSsl = !(process.env.DATABASE_SSL === "false" || isLocal);
+const client = new pg.Client({
+  connectionString,
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
+});
 client.on("error", (e) => console.error("client error:", e.message));
 
 const t0 = Date.now();

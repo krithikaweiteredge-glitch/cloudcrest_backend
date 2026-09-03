@@ -71,9 +71,27 @@ function toIsoDate(d: string | null): string | null {
   return s;
 }
 
+/**
+ * `company_type` is stored as a 1-char code — the source repeats
+ * "Non-government company" verbatim on ~89% of the 2.7M rows, and spelling it
+ * out costs ~55 MB of table for no extra information. project_lean_all.py
+ * writes the code; this expands it back for display. Unrecognised values are
+ * stored (and returned) as-is.
+ */
+const COMPANY_TYPE_LABELS: Record<string, string> = {
+  N: "Non-government company",
+  U: "Union government company",
+  S: "State government company",
+  F: "Subsidiary of company incorporated outside India",
+  G: "Guarantee and association company",
+};
+
+const companyTypeLabel = (v: string | null): string | undefined =>
+  v ? COMPANY_TYPE_LABELS[v] ?? v : undefined;
+
 /** Shape an mca_companies row into the match object the client renders. */
 function toMatch(r: { name: string; kind: string; klass: string | null; companyType: string | null; identifier: string | null; regDate: string | null }): CompanyMatch {
-  const industry = [r.klass, r.companyType].filter(Boolean).join(" · ") || undefined;
+  const industry = [r.klass, companyTypeLabel(r.companyType)].filter(Boolean).join(" · ") || undefined;
   const location = r.regDate ? toIsoDate(r.regDate) || r.regDate : undefined;
   return {
     name: r.name,
