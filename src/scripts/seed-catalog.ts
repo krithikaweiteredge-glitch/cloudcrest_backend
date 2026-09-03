@@ -743,13 +743,18 @@ const CATALOG: SeedGroup[] = [
     category: "Other Business Registrations",
     subcategory: "Other Business Registrations",
     services: [
-      svc("msme", "MSME / Udyam", "MSME", "MoMSME", "Udyam", "Factory", [
-        "Aadhaar of proprietor / signatory",
-        "PAN of business",
-        "Bank account details",
-        "Business address proof",
-        "Investment & turnover details",
-      ]),
+      {
+        ...svc("msme", "MSME / Udyam", "MSME", "MoMSME", "Udyam", "Factory", [
+          "Aadhaar of proprietor / signatory",
+          "PAN of business",
+          "Bank account details",
+          "Business address proof",
+          "Investment & turnover details",
+        ]),
+        professionalFee: 1000,
+        govtFee: 0,
+        gstPercent: 18,
+      },
       svc("iec", "IEC Import-Export", "IEC", "DGFT", "ANF-2A", "Globe", [
         "PAN of applicant / entity",
         "Aadhaar / voter ID of proprietor",
