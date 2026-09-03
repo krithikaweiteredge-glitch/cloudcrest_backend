@@ -764,7 +764,12 @@ const CATALOG: SeedGroup[] = [
       ]),
       min("din", "Director Identification Number (DIN)", "DIN", "MCA", "IdCard"),
       min("lei", "Legal Entity Identifier (LEI)", "LEI", "LEIL", "IdCard"),
-      min("ngo-darpan", "NGO Darpan (NPO)", "NGO Darpan", "NITI Aayog", "Users"),
+      {
+        ...min("ngo-darpan", "NGO Darpan (NPO)", "NGO Darpan", "NITI Aayog", "Users"),
+        professionalFee: 1999,
+        govtFee: 0,
+        gstPercent: 18,
+      },
       min("rera", "RERA Registration", "RERA", "State RERA", "HomeIcon"),
       min("dsc", "Digital Signature Certificate", "DSC", "Certifying Authority (CCA)", "FileBadge2"),
       min("iso", "ISO Certification", "ISO", "Certification Body", "Award"),
