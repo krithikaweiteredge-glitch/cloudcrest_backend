@@ -74,7 +74,7 @@ function toIsoDate(d: string | null): string | null {
 /** Shape an mca_companies row into the match object the client renders. */
 function toMatch(r: { name: string; kind: string; klass: string | null; companyType: string | null; identifier: string | null; regDate: string | null }): CompanyMatch {
   const industry = [r.klass, r.companyType].filter(Boolean).join(" · ") || undefined;
-  const location = r.identifier ? `${r.identifier}${r.regDate ? ` · ${r.regDate}` : ""}` : r.regDate || undefined;
+  const location = r.regDate ? toIsoDate(r.regDate) || r.regDate : undefined;
   return {
     name: r.name,
     industry,
@@ -150,7 +150,7 @@ export async function checkNameAvailability(req: Request, res: Response) {
           name: r.name,
           identifier: r.identifier || undefined,
           industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
-          location: [r.identifier, r.month].filter(Boolean).join(" · ") || undefined,
+          location: r.month || undefined,
           companyStatus: "Strike Off",
           status: "Strike Off",
         })),
@@ -280,7 +280,7 @@ export async function getSimilarNames(req: Request, res: Response) {
       name: r.name,
       identifier: r.identifier || undefined,
       industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
-      location: [r.identifier, r.month].filter(Boolean).join(" · ") || undefined,
+      location: r.month || undefined,
       companyStatus: "Strike Off",
       status: "Strike Off",
     }));
