@@ -2,7 +2,7 @@
  * Bulk-load the MCA company registry index into Postgres via chunked COPY.
  *
  * Reads a headerless CSV whose columns are, in order:
- *   identifier, name, kind, klass, reg_date, core_norm
+ *   identifier, name, kind, klass, company_type, reg_date, core_norm
  * (produced by the year-wise MCA parser + project_lean.py).
  *
  * Usage:
@@ -31,17 +31,26 @@ if (!csvPath || !fs.existsSync(csvPath)) {
   process.exit(1);
 }
 
-// Prefer the direct endpoint for bulk load (strip Neon's "-pooler" token).
+// Prefer the direct endpoint for bulk load (strip Neon's "-pooler" token; a
+// no-op for a self-hosted or local server).
 const connectionString = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
 const CHUNK = 150_000;
 
-const client = new pg.Client({ connectionString, ssl: { rejectUnauthorized: false } });
+// Local/self-hosted Postgres speaks plain TCP — forcing TLS at it fails the
+// handshake. Mirrors the detection in src/config/db.ts.
+const isLocal = /(?:localhost|127\.0\.0\.1)/.test(connectionString);
+const useSsl = !(process.env.DATABASE_SSL === "false" || isLocal);
+
+const client = new pg.Client({
+  connectionString,
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
+});
 client.on("error", (e) => console.error("client error:", e.message));
 
 /** COPY one buffer of CSV lines as a single transaction. */
 function copyChunk(lines) {
   return new Promise((resolve, reject) => {
-    const stream = client.query(copyFrom("COPY mca_companies (identifier,name,kind,klass,reg_date,core_norm) FROM STDIN WITH (FORMAT csv)"));
+    const stream = client.query(copyFrom("COPY mca_companies (identifier,name,kind,klass,company_type,reg_date,core_norm) FROM STDIN WITH (FORMAT csv)"));
     stream.on("error", reject);
     stream.on("finish", resolve);
     stream.write(lines.join("\n") + "\n");
