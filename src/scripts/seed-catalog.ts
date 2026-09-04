@@ -29,6 +29,7 @@ import {
 import { eq } from "drizzle-orm";
 import { COMPANY_WIZARD_DEFAULTS } from "../config/companyWizardDefaults.js";
 import { EXACT_NAMES } from "../config/exactNames.js";
+import { REGISTRATION_CATALOG } from "../config/registrationCatalog.js";
 
 type SeedService = {
   slug: string;
@@ -154,6 +155,29 @@ const svc = (
 // these are active so they list in the customer sidebar. Form numbers are left
 // as "—" rather than invented.
 // ---------------------------------------------------------------------------
+/**
+ * A service whose fee, copy and checklist the client supplied in a spec document
+ * — see `config/registrationCatalog.ts`. Everything comes from that one map so
+ * the seed and the backfill script can never disagree about what a row holds.
+ */
+const spec = (slug: keyof typeof REGISTRATION_CATALOG): SeedService => {
+  const e = REGISTRATION_CATALOG[slug];
+  return {
+    slug,
+    name: e.name,
+    shortTitle: e.shortTitle,
+    authority: e.authority,
+    formNo: e.formNo,
+    icon: e.icon,
+    description: e.description,
+    whoCanApply: e.whoCanApply,
+    professionalFee: e.professionalFee,
+    govtFee: e.govtFee,
+    gstPercent: e.gstPercent,
+    documents: e.documents,
+  };
+};
+
 const min = (
   slug: string,
   name: string,
@@ -755,22 +779,16 @@ const CATALOG: SeedGroup[] = [
         govtFee: 0,
         gstPercent: 18,
       },
-      svc("iec", "IEC Import-Export", "IEC", "DGFT", "ANF-2A", "Globe", [
-        "PAN of applicant / entity",
-        "Aadhaar / voter ID of proprietor",
-        "Business address proof",
-        "Cancelled cheque of current account",
-        "Digital photograph",
-      ]),
-      min("din", "Director Identification Number (DIN)", "DIN", "MCA", "IdCard"),
-      min("lei", "Legal Entity Identifier (LEI)", "LEI", "LEIL", "IdCard"),
+      spec("iec"),
+      spec("din"),
+      spec("lei"),
       {
         ...min("ngo-darpan", "NGO Darpan (NPO)", "NGO Darpan", "NITI Aayog", "Users"),
         professionalFee: 1999,
         govtFee: 0,
         gstPercent: 18,
       },
-      min("rera", "RERA Registration", "RERA", "State RERA", "HomeIcon"),
+      spec("rera"),
       min("dsc", "Digital Signature Certificate", "DSC", "Certifying Authority (CCA)", "FileBadge2"),
       min("iso", "ISO Certification", "ISO", "Certification Body", "Award"),
     ],
