@@ -13,6 +13,12 @@
  *   - professional_fee / govt_fee / gst_percent  ALWAYS overwritten. These are
  *     the prices the client gave us (999 + 18% for DIN / IEC / LEI, 5999 + 18%
  *     for RERA) and are the whole point of the backfill.
+ *   - fee_lines  ALWAYS cleared, for the same reason. `resolveFees` gives
+ *     admin-authored fee lines outright priority over the three columns, so a
+ *     stale set silently wins and the row keeps quoting the old price while the
+ *     columns say otherwise — which is exactly what happened to IEC, left
+ *     showing 5000 + 900 after this script had written 999 + 18% beneath it.
+ *     Writing a price here means that price is what the customer sees.
  *   - description / who_can_apply / authority / form_no  filled ONLY when the
  *     column is currently empty (or "—"), so admin-authored copy is never lost.
  *   - document_types  inserted ONLY when the service has no checklist rows at
@@ -62,13 +68,21 @@ async function run() {
       continue;
     }
 
-    // Pricing is the client's, and always wins.
+    // Pricing is the client's, and always wins — including over any custom
+    // fee_lines, which would otherwise shadow the columns we just wrote.
     const patch: Record<string, unknown> = {
       professionalFee: entry.professionalFee.toFixed(2),
       govtFee: entry.govtFee.toFixed(2),
       gstPercent: entry.gstPercent.toFixed(2),
+      feeLines: null,
     };
     const filled: string[] = [];
+
+    // Worth saying out loud when it happens: someone authored that price by hand.
+    const hadFeeLines = !!row.feeLines && row.feeLines.trim() !== "" && row.feeLines.trim() !== "[]";
+    if (hadFeeLines) {
+      console.log(`           ↳ cleared custom fee_lines that were overriding it: ${row.feeLines}`);
+    }
 
     // Copy and identity only fill gaps — an admin may have authored these.
     if (isEmpty(row.description)) {
