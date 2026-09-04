@@ -18,7 +18,12 @@ if (!csvPath || !fs.existsSync(csvPath)) {
   process.exit(1);
 }
 
-const connectionString = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
+// node-postgres lets `sslmode` in the URL override the `ssl` option below, so a
+// self-signed provider CA (Aiven) fails with SELF_SIGNED_CERT_IN_CHAIN. Strip it
+// and let the explicit option decide. Mirrors stripSslMode() in src/config/db.ts.
+const stripSslMode = (u) => u.replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
+
+const connectionString = stripSslMode((process.env.DATABASE_URL || "").replace("-pooler.", "."));
 // Local/self-hosted Postgres speaks plain TCP; only managed providers need TLS.
 const isLocal = /(?:localhost|127\.0\.0\.1)/.test(connectionString);
 const useSsl = !(process.env.DATABASE_SSL === "false" || isLocal);

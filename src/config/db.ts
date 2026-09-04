@@ -2,7 +2,24 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { env } from "./env.js";
 
-const connectionString = env.databaseUrl;
+/**
+ * `sslmode` in the URL has to go before we hand the string to pg.
+ *
+ * node-postgres parses `sslmode` out of the connection string and lets it
+ * override the `ssl` option object below. `sslmode=require` therefore turns into
+ * a strict chain verification, which Neon survives (its certificate chains to a
+ * public CA) but Aiven does not — Aiven presents a self-signed CA, so the
+ * connection dies with SELF_SIGNED_CERT_IN_CHAIN before a query is ever sent.
+ *
+ * Stripping it lets the explicit `ssl` option decide, which is the behaviour the
+ * code already documents and intends. The connection is still TLS-encrypted;
+ * it just isn't chain-verified — the same trade-off `rejectUnauthorized: false`
+ * was already making for Neon and Supabase.
+ */
+const stripSslMode = (url: string) =>
+  url.replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
+
+const connectionString = stripSslMode(env.databaseUrl);
 const isLocal = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
 // Explicit override for a self-hosted Postgres reached by Docker service name
 // (e.g. `@postgres:5432`), which isn't "localhost" but still speaks plain TCP.
