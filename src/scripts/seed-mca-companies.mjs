@@ -33,8 +33,37 @@ if (!csvPath || !fs.existsSync(csvPath)) {
 
 // Prefer the direct endpoint for bulk load (strip Neon's "-pooler" token; a
 // no-op for a self-hosted or local server).
-const connectionString = (process.env.DATABASE_URL || "").replace("-pooler.", ".");
-const CHUNK = 150_000;
+// node-postgres lets `sslmode` in the URL override the `ssl` option below, so a
+// self-signed provider CA (Aiven) fails with SELF_SIGNED_CERT_IN_CHAIN. Strip it
+// and let the explicit option decide. Mirrors stripSslMode() in src/config/db.ts.
+const stripSslMode = (u) => u.replace(/([?&])sslmode=[^&]*&?/, "$1").replace(/[?&]$/, "");
+
+const connectionString = stripSslMode((process.env.DATABASE_URL || "").replace("-pooler.", "."));
+
+/**
+ * Pacing controls. Defaults reproduce the original Neon behaviour exactly.
+ *
+ * A provider with a small WAL budget needs a gentler load than Neon does. Aiven's
+ * smallest plan runs `max_wal_size = 49MB`; firing 150k-row COPYs back to back at
+ * it generates write-ahead log faster than the server can checkpoint it away, the
+ * disk fills with log, and the service protects itself by flipping to read-only
+ * mid-load. Nothing is corrupted — it recovers once WAL is reclaimed — but the
+ * load dies. Smaller chunks with a pause between them keep WAL inside the budget.
+ *
+ *   MCA_CHUNK=25000 MCA_PAUSE_MS=750 MCA_TRUNCATE=1 node seed-mca-companies.mjs <csv>
+ */
+const CHUNK = Number(process.env.MCA_CHUNK || 150_000);
+const PAUSE_MS = Number(process.env.MCA_PAUSE_MS || 0);
+/**
+ * TRUNCATE instead of DROP + CREATE. Dropping a large table and rebuilding it
+ * churns far more than emptying one in place, which matters when the disk is
+ * tight. Falls back to creating the table when it doesn't exist yet.
+ */
+const USE_TRUNCATE = process.env.MCA_TRUNCATE === "1";
+/** Abort if the database grows past this (MB). 0 disables the guard. */
+const MAX_DB_MB = Number(process.env.MCA_MAX_DB_MB || 0);
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Local/self-hosted Postgres speaks plain TCP — forcing TLS at it fails the
 // handshake. Mirrors the detection in src/config/db.ts.
@@ -61,6 +90,14 @@ function copyChunk(lines) {
 const t0 = Date.now();
 await client.connect();
 try {
+  const exists = (
+    await client.query("select to_regclass('public.mca_companies') is not null as ok")
+  ).rows[0].ok;
+
+  if (USE_TRUNCATE && exists) {
+    console.log("Emptying table mca_companies (TRUNCATE) …");
+    await client.query("TRUNCATE TABLE mca_companies;");
+  } else {
   console.log("Recreating table mca_companies …");
   await client.query("DROP TABLE IF EXISTS mca_companies;");
   await client.query(`
@@ -78,8 +115,14 @@ try {
   // Build the index up-front so it is maintained incrementally per chunk,
   // avoiding a single large index-build WAL spike at the end.
   await client.query("CREATE INDEX mca_companies_core_norm_idx ON mca_companies (core_norm);");
+  }
 
-  console.log(`COPYing in chunks of ${CHUNK.toLocaleString()} …`);
+  console.log(
+    `COPYing in chunks of ${CHUNK.toLocaleString()}` +
+      (PAUSE_MS ? ` with a ${PAUSE_MS}ms pause between chunks` : "") +
+      (MAX_DB_MB ? ` (abort above ${MAX_DB_MB} MB)` : "") +
+      " …"
+  );
   const rl = readline.createInterface({ input: fs.createReadStream(csvPath), crlfDelay: Infinity });
   let buf = [];
   let total = 0;
@@ -90,7 +133,27 @@ try {
       await copyChunk(buf);
       total += buf.length;
       buf = [];
-      process.stdout.write(`  loaded ${total.toLocaleString()} rows\r`);
+
+      // Report actual database size periodically — on a tight plan this is the
+      // number that decides whether the load finishes, so it belongs in the log
+      // rather than only in a summary that a failed run never reaches.
+      if (total % (CHUNK * 10) === 0 || MAX_DB_MB) {
+        const { rows } = await client.query(
+          "select pg_database_size(current_database())/1024/1024 as mb"
+        );
+        const mb = Number(rows[0].mb);
+        console.log(`  loaded ${total.toLocaleString()} rows — db ${mb} MB`);
+        if (MAX_DB_MB && mb > MAX_DB_MB) {
+          throw new Error(
+            `database reached ${mb} MB, above the ${MAX_DB_MB} MB guard — stopping before the provider does`
+          );
+        }
+      } else {
+        process.stdout.write(`  loaded ${total.toLocaleString()} rows\r`);
+      }
+
+      // Give the server room to checkpoint and recycle WAL before the next burst.
+      if (PAUSE_MS) await sleep(PAUSE_MS);
     }
   }
   if (buf.length) {
