@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { db } from "../config/db.js";
 import { env } from "../config/env.js";
 import { businesses, mcaCompanies, mcaStruckOff } from "../models/schema.js";
-import { and, eq, like, sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 
 /** A company match returned to the client. */
 type CompanyMatch = {
@@ -14,6 +14,8 @@ type CompanyMatch = {
   status?: string;
   companyStatus?: string;
   identifier?: string;
+  /** "Private Limited Company" | "Public Limited Company" | "LLP" | … */
+  entityType?: string;
 };
 
 /** Collapse a name to a comparable key (lowercase, alphanumerics only). */
@@ -52,6 +54,74 @@ function coreKey(name: string): string {
   }
   return s;
 }
+
+/**
+ * Descriptive tail words that carry no distinguishing weight in a company name.
+ * "Pascalcase Enterprises" and "Pascalcase Software" are the same brand wearing
+ * different coats — the MCA assesses similarity on the distinctive part, so the
+ * search has to as well.
+ *
+ * Only ever stripped from the END of a name, and never all of it: at least one
+ * word always survives, so "Enterprises Limited" still searches for
+ * "enterprises".
+ */
+const GENERIC_TAIL_WORDS = new Set([
+  "enterprise", "enterprises", "solution", "solutions", "technology", "technologies",
+  "tech", "industry", "industries", "service", "services", "venture", "ventures",
+  "trading", "traders", "trader", "export", "exports", "import", "imports",
+  "associate", "associates", "group", "corporation", "system", "systems",
+  "lab", "labs", "consultancy", "consultant", "consultants", "consulting",
+  "infra", "infrastructure", "developer", "developers", "builder", "builders",
+  "project", "projects", "agency", "agencies", "marketing", "international",
+  "global", "worldwide", "overseas", "products", "product", "works", "and", "&",
+]);
+
+/** The same legal-form words as SUFFIX_TOKENS, matched per-word rather than glued. */
+const LEGAL_WORDS = new Set([
+  ...SUFFIX_TOKENS,
+  "liability", "partnership", "person", "one", "producer",
+]);
+
+/**
+ * The distinctive head of a proposed name, glued to compare against the index's
+ * `core_norm`. Drops trailing legal-form and descriptive words:
+ *
+ *   "Pascalcase Enterprises Private Limited"  →  "pascalcase"
+ *   "Acme Tech Solutions LLP"                 →  "acme"
+ *   "Sunrise Textiles"                        →  "sunrise"
+ *
+ * A prefix search on this is what makes typing "Pascalcase Enterprises" surface
+ * the already-registered "PASCALCASE SOFTWARE PRIVATE LIMITED".
+ *
+ * GENERIC_TAIL_WORDS can only ever be a partial list — every industry has its
+ * own descriptor ("Textiles", "Motors", "Pharma", "Steel", …) and chasing them
+ * all with a dictionary is hopeless. So when nothing was stripped from a
+ * multi-word name, fall back to its first word, which is where the distinctive
+ * part of a company name almost always sits. These are the loosest matches and
+ * rank last, so they fill the tail of the list rather than crowding out the
+ * whole-name matches above them.
+ */
+function distinctiveStem(name: string): string {
+  const words = name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.length < 2) return words.join("");
+
+  let end = words.length;
+  // Keep at least the first word, whatever it is.
+  while (end > 1 && (GENERIC_TAIL_WORDS.has(words[end - 1]) || LEGAL_WORDS.has(words[end - 1]))) {
+    end--;
+  }
+  // Nothing recognised as generic — fall back to the leading word.
+  if (end === words.length) end = 1;
+  return words.slice(0, end).join("");
+}
+
+/**
+ * How many matches each index contributes, and how many survive to the client.
+ * Generous, because the point of the panel is to show every existing name close
+ * enough to block the one being typed.
+ */
+const SIMILAR_PER_TABLE = 12;
+const SIMILAR_TOTAL = 20;
 
 /** Human-readable entity type from the index's kind/class. */
 function mcaEntityType(kind: string, klass: string | null): string {
@@ -96,6 +166,9 @@ function toMatch(r: { name: string; kind: string; klass: string | null; companyT
   return {
     name: r.name,
     industry,
+    // The home search no longer filters by entity structure, so LLPs, private
+    // and public companies come back in one list — each row says which it is.
+    entityType: mcaEntityType(r.kind, r.klass),
     location,
     identifier: r.identifier || undefined,
     companyStatus: "Active",
@@ -154,7 +227,7 @@ export async function checkNameAvailability(req: Request, res: Response) {
           })
           .from(mcaStruckOff)
           .where(eq(mcaStruckOff.coreNorm, core))
-          .limit(5)
+          .limit(SIMILAR_PER_TABLE)
       : [];
 
     if (struck.length > 0) {
@@ -168,6 +241,7 @@ export async function checkNameAvailability(req: Request, res: Response) {
           name: r.name,
           identifier: r.identifier || undefined,
           industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
+          entityType: r.kind === "llp" ? "LLP" : "Company",
           location: r.month || undefined,
           companyStatus: "Strike Off",
           status: "Strike Off",
@@ -191,7 +265,7 @@ export async function checkNameAvailability(req: Request, res: Response) {
           })
           .from(mcaCompanies)
           .where(eq(mcaCompanies.coreNorm, core))
-          .limit(5)
+          .limit(SIMILAR_PER_TABLE)
       : [];
 
     if (rows.length > 0) {
@@ -234,30 +308,93 @@ export async function checkNameAvailability(req: Request, res: Response) {
   }
 }
 
+/**
+ * Wildcard-leading patterns (`%acme`, `%acme%`) match an enormous slice of a
+ * 1.9M-row index on a two-letter stem, so contains/suffix matching only kicks in
+ * once the brand key is this long. Shorter stems stay prefix-only.
+ */
+const LOOSE_MATCH_MIN_LEN = 3;
+
+/** Escape the LIKE metacharacters so a typed `%` or `_` is matched literally. */
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+/**
+ * Match an existing registry brand key against what the applicant typed, and
+ * rank how close it is. A name is "close" when the two brand keys overlap in
+ * EITHER direction, so all of these surface:
+ *
+ *   0  exact          typed "acme"                    → ACME PRIVATE LIMITED
+ *   1  prefix         typed "acme"                    → ACME TECH PRIVATE LIMITED
+ *   2  extension      typed "acmetech"                → ACME LIMITED   (you are extending a taken brand)
+ *   3  suffix         typed "tech"                    → ACME TECH LLP
+ *   4  contains       typed "metec"                   → ACME TECH LLP
+ *   5  same brand     typed "pascalcase enterprises"  → PASCALCASE SOFTWARE PRIVATE LIMITED
+ *
+ * Legal suffixes never matter here: `coreKey` has already stripped "Private
+ * Limited" / "LLP" / "Limited" from both sides, so "Acme Pvt Ltd", "Acme LLP"
+ * and a bare "Acme" all reduce to the same key and match each other.
+ *
+ * Rank 5 is what makes a MULTI-WORD name work. Ranks 0-4 all compare the whole
+ * glued key, so "pascalcaseenterprises" and "pascalcasesoftware" miss each other
+ * entirely — neither contains the other. Matching the distinctive head as well
+ * catches every registered name built on the same brand word.
+ */
+function similarityClause(column: SQL | any, core: string, stem: string) {
+  const esc = escapeLike(core);
+  const loose = core.length >= LOOSE_MATCH_MIN_LEN;
+
+  // Only worth a separate clause when the head is genuinely shorter than the
+  // whole key (i.e. trailing descriptors were dropped) and still substantial.
+  const escStem = escapeLike(stem);
+  const useStem = stem.length >= LOOSE_MATCH_MIN_LEN && stem !== core;
+  const stemMatch = useStem ? sql` OR ${column} LIKE ${`${escStem}%`} ESCAPE '\\'` : sql``;
+
+  const looseMatch = loose
+    ? sql` OR ${column} LIKE ${`%${esc}`} ESCAPE '\\'
+        OR ${column} LIKE ${`%${esc}%`} ESCAPE '\\'`
+    : sql``;
+
+  const match = sql`(${column} LIKE ${`${esc}%`} ESCAPE '\\'
+      OR ${core} LIKE ${column} || '%'${looseMatch}${stemMatch})`;
+
+  // Lower rank sorts first; length breaks ties so the shortest (closest) brand
+  // wins, then name for a stable order across repeated keystrokes.
+  const stemRank = useStem
+    ? sql` WHEN ${column} LIKE ${`${escStem}%`} ESCAPE '\\' THEN 5`
+    : sql``;
+
+  const rank = sql`CASE
+      WHEN ${column} = ${core} THEN 0
+      WHEN ${column} LIKE ${`${esc}%`} ESCAPE '\\' THEN 1
+      WHEN ${core} LIKE ${column} || '%' THEN 2
+      WHEN ${column} LIKE ${`%${esc}`} ESCAPE '\\' THEN 3
+      WHEN ${column} LIKE ${`%${esc}%`} ESCAPE '\\' THEN 4${stemRank}
+      ELSE 6
+    END`;
+
+  return { match, rank };
+}
+
 // 1b. SIMILAR EXISTING NAMES — live "as you type" suggestions of already-registered
-// companies & LLPs (including struck-off entities) whose brand begins with what the
+// companies & LLPs (including struck-off entities) whose brand is close to what the
 // applicant has typed. Powers the home search's "similar existing companies" preview.
+//
+// Deliberately unfiltered by entity structure: the MCA blocks a name across all
+// of them ("Acme Pvt Ltd" bars "Acme LLP"), so narrowing the list to one type
+// would hide the very names that make the applicant's choice unavailable. Each
+// row carries its own entityType instead, and the client labels it.
 export async function getSimilarNames(req: Request, res: Response) {
   try {
     const q = String(req.query.q ?? "").trim();
     const core = coreKey(q);
+    // The distinctive head of the name, so a multi-word search also finds every
+    // registered name sharing its brand word (see `similarityClause`).
+    const stem = distinctiveStem(q);
     const minLen = Math.min(q.length, core.length);
     if (minLen < 2) return res.status(200).json({ matches: [] });
 
-    const type = String(req.query.type ?? "").toLowerCase();
-
-    // 1. Query Active MCA Companies filtered by selected entity structure
-    const conds: SQL[] = [like(mcaCompanies.coreNorm, `${core}%`)];
-    if (type === "llp") {
-      conds.push(eq(mcaCompanies.kind, "llp"));
-    } else if (type === "public" || type === "limited") {
-      conds.push(eq(mcaCompanies.kind, "indian"));
-      conds.push(sql`${mcaCompanies.klass} ~* 'publ'`);
-    } else if (type === "private") {
-      conds.push(eq(mcaCompanies.kind, "indian"));
-      conds.push(sql`(${mcaCompanies.klass} IS NULL OR ${mcaCompanies.klass} !~* 'publ')`);
-    }
-
+    // 1. Active MCA companies & LLPs, closest brand first.
+    const active = similarityClause(mcaCompanies.coreNorm, core, stem);
     const activeRows = await db
       .select({
         name: mcaCompanies.name,
@@ -268,20 +405,15 @@ export async function getSimilarNames(req: Request, res: Response) {
         regDate: mcaCompanies.regDate,
       })
       .from(mcaCompanies)
-      .where(and(...conds))
-      .orderBy(sql`length(${mcaCompanies.coreNorm})`)
-      .limit(6);
+      .where(active.match)
+      .orderBy(active.rank, sql`length(${mcaCompanies.coreNorm})`, mcaCompanies.name)
+      .limit(SIMILAR_PER_TABLE);
 
     const activeMatches = activeRows.map(toMatch);
 
-    // 2. Query Struck-Off Entities filtered by entity type
-    const struckConds: SQL[] = [like(mcaStruckOff.coreNorm, `${core}%`)];
-    if (type === "llp") {
-      struckConds.push(eq(mcaStruckOff.kind, "llp"));
-    } else if (type === "private" || type === "public" || type === "limited") {
-      struckConds.push(eq(mcaStruckOff.kind, "company"));
-    }
-
+    // 2. Struck-off entities — their names stay restricted for 20 years, so they
+    //    block a new registration just as an active company does.
+    const struck = similarityClause(mcaStruckOff.coreNorm, core, stem);
     const struckRows = await db
       .select({
         name: mcaStruckOff.name,
@@ -290,14 +422,15 @@ export async function getSimilarNames(req: Request, res: Response) {
         month: mcaStruckOff.month,
       })
       .from(mcaStruckOff)
-      .where(and(...struckConds))
-      .orderBy(sql`length(${mcaStruckOff.coreNorm})`)
-      .limit(6);
+      .where(struck.match)
+      .orderBy(struck.rank, sql`length(${mcaStruckOff.coreNorm})`, mcaStruckOff.name)
+      .limit(SIMILAR_PER_TABLE);
 
     const struckMatches: CompanyMatch[] = struckRows.map((r) => ({
       name: r.name,
       identifier: r.identifier || undefined,
       industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
+      entityType: r.kind === "llp" ? "LLP" : "Company",
       location: r.month || undefined,
       companyStatus: "Strike Off",
       status: "Strike Off",
@@ -316,29 +449,22 @@ export async function getSimilarNames(req: Request, res: Response) {
       }
     }
 
-    // If few or no results found locally and user typed a substantive name, check data.gov.in API
-    if (combined.length < 6 && q.length >= 3) {
+    // If few or no results found locally and the applicant typed a substantive
+    // name, fall back to data.gov.in. No entity-type gate any more — every
+    // structure blocks the name, so whatever comes back is worth showing.
+    if (combined.length < SIMILAR_PER_TABLE && q.length >= 3) {
       try {
         const govMatch = await fetchMcaGovDataByName(q);
-        if (govMatch) {
-          const isLlp = /\bllp\b/i.test(govMatch.name) || /llp/i.test(govMatch.industry || "");
-          const isMatchForType =
-            (type === "llp" && isLlp) ||
-            (type === "private" && !isLlp) ||
-            (type === "public" && /public/i.test(govMatch.industry || "")) ||
-            !type;
-
-          if (isMatchForType && !seenNames.has(normalizeName(govMatch.name))) {
-            seenNames.add(normalizeName(govMatch.name));
-            combined.unshift(govMatch);
-          }
+        if (govMatch && !seenNames.has(normalizeName(govMatch.name))) {
+          seenNames.add(normalizeName(govMatch.name));
+          combined.unshift(govMatch);
         }
       } catch {
         // ignore
       }
     }
 
-    return res.status(200).json({ matches: combined.slice(0, 8) });
+    return res.status(200).json({ matches: combined.slice(0, SIMILAR_TOTAL) });
   } catch (error: any) {
     console.error("MCA similar-names error:", error);
     return res.status(500).json({ error: "Failed to fetch similar names" });
