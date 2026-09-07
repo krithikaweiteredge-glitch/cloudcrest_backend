@@ -416,9 +416,19 @@ const CATALOG: SeedGroup[] = [
       // New addition — Sole Proprietorship. (The base `trust` row lives in this
       // subcategory too, still admin-managed and intentionally not seeded here so
       // its content is never clobbered — only its type / per-state rows are seeded
-      // below.)
-      min("sole-proprietorship", "Sole Proprietorship", "Proprietorship", "—", "Store"),
-      // Trust type rows — like Partnership, a trust is first chosen as Private or
+      {
+        ...svc("sole-proprietorship", "Sole Proprietorship Registration", "Sole Proprietorship", "Municipal & State Dept.", "Registration", "Store", [
+          "Owner PAN",
+          "Owner Aadhaar",
+          "Electricity Bill",
+          "Rental Agreement / NOC",
+        ]),
+        description: "A sole proprietorship is the simplest form of business ownership in India. It is owned and managed by a single individual. There is no separate legal entity — the business and the proprietor are the same in the eyes of the law.\n\nThere is no single formal registration or incorporation process under a specific Act. Instead, a sole proprietorship gains legal recognition and operational capability through a combination of registrations and licences.",
+        whoCanApply: "Any individual who meets the following criteria can start and operate a sole proprietorship:\n• Must be an Indian citizen and resident of India\n• Must be 18 years of age or above\n• Must possess a valid PAN and Aadhaar\n• Must be legally competent to enter into contracts",
+        actsRules: "",
+        professionalFee: 999,
+        gstPercent: 18,
+      },
       // Public, and only then a state. Both are inactive (they are wizard steps,
       // never sidebar entries) and act as the fallback when a (type × state) row
       // isn't authored yet.
