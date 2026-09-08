@@ -33,6 +33,14 @@ export const requestDocuments = pgTable("request_documents", {
   requestId: bigint("request_id", { mode: "number" }).references(() => serviceRequests.id, { onDelete: "cascade" }),
   userId: bigint("user_id", { mode: "number" }).references(() => users.id, { onDelete: "cascade" }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
+  /**
+   * The exact required-document heading this file was uploaded against (e.g.
+   * "PAN & Aadhaar of all directors"). Stored verbatim so the checklist can be
+   * matched by identity instead of guessing from the file name. Null for files
+   * uploaded outside the checklist ("Additional documents") and for legacy rows
+   * that only carry the "Label :: filename" convention in `name`.
+   */
+  docLabel: varchar("doc_label", { length: 512 }),
   sizeBytes: bigint("size_bytes", { mode: "number" }),
   storagePath: varchar("storage_path", { length: 1024 }).notNull(),
   mimeType: varchar("mime_type", { length: 255 }),
