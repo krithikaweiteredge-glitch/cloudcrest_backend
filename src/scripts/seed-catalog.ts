@@ -40,6 +40,7 @@ type SeedService = {
   icon: string;
   description?: string;
   whoCanApply?: string;
+  actsRules?: string;
   professionalFee: number;
   govtFee: number;
   gstPercent: number;
