@@ -844,7 +844,7 @@ const CATALOG: SeedGroup[] = [
           "PAN Card (mandatory)",
           "Aadhaar Card (for eKYC)",
           "Recent passport-size photograph",
-          "GST Certificate (extra required for organisation combo DSC)",
+          "GST Certificate",
         ],
         professionalFee: 4000,
         govtFee: 0,
