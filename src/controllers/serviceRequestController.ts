@@ -772,12 +772,15 @@ export async function uploadVaultDocument(req: AuthenticatedRequest, res: Respon
     }
 
     const savedDocs = [];
+    const docLabel = (req.body && typeof req.body.label === "string" ? req.body.label.trim() : "") ||
+                     (req.body && typeof req.body.documentType === "string" ? req.body.documentType.trim() : "");
     for (const f of files) {
       const storagePath = await saveUpload(f);
+      const name = docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname;
       const docValues = {
         requestId: null,
         userId,
-        name: f.originalname,
+        name,
         sizeBytes: f.size,
         storagePath,
         mimeType: f.mimetype,
