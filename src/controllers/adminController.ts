@@ -18,11 +18,12 @@ import {
 // notifications are readable by the user-facing notification menu.
 import { notifications } from "../models/schema/notifications.js";
 import { AuthenticatedRequest } from "../middlewares/authMiddleware.js";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, inArray } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import { logActivity } from "../utils/auditLogger.js";
 import { isRemoteUrl } from "../utils/storage.js";
+import { resolveRequiredDocsForRequest } from "./serviceRequestController.js";
 
 // 1. LIST ALL REGISTERED USERS
 export async function listAllUsers(req: AuthenticatedRequest, res: Response) {
@@ -499,12 +500,59 @@ export async function listAllRequests(req: AuthenticatedRequest, res: Response) 
         contactEmail: serviceRequests.contactEmail,
         userName: users.firstName,
         userEmail: users.email,
+        formData: serviceRequests.formData,
       })
       .from(serviceRequests)
       .leftJoin(users, eq(serviceRequests.userId, users.id))
       .orderBy(desc(serviceRequests.createdAt));
 
-    return res.status(200).json(list);
+    // Attach every registration's documents in one query, so the list can show
+    // an accurate uploaded/pending count without an N+1 fan-out.
+    const allDocs = list.length
+      ? await db
+          .select({
+            requestId: requestDocuments.requestId,
+            id: requestDocuments.id,
+            name: requestDocuments.name,
+            docLabel: requestDocuments.docLabel,
+            createdAt: requestDocuments.createdAt,
+          })
+          .from(requestDocuments)
+          .where(
+            inArray(
+              requestDocuments.requestId,
+              list.map((r) => r.id)
+            )
+          )
+      : [];
+
+    const docsByRequest = new Map<number, typeof allDocs>();
+    for (const doc of allDocs) {
+      if (doc.requestId == null) continue;
+      const bucket = docsByRequest.get(doc.requestId);
+      if (bucket) bucket.push(doc);
+      else docsByRequest.set(doc.requestId, [doc]);
+    }
+
+    const enriched = await Promise.all(
+      list.map(async ({ formData, ...row }) => {
+        const requiredDocuments = await resolveRequiredDocsForRequest(
+          row.serviceSlug ?? "",
+          row.serviceTitle ?? "",
+          formData
+        );
+        const documents = docsByRequest.get(row.id) ?? [];
+        return {
+          ...row,
+          requiredDocuments,
+          documents,
+          documentsCount: documents.length,
+          requiredCount: requiredDocuments.length,
+        };
+      })
+    );
+
+    return res.status(200).json(enriched);
   } catch (error: any) {
     console.error("Admin list registrations error:", error);
     return res.status(500).json({ error: "Failed to fetch registrations list" });
@@ -551,7 +599,15 @@ export async function getRequestByIdAdmin(req: AuthenticatedRequest, res: Respon
       applicant = u || null;
     }
 
-    return res.status(200).json({ ...request, documents: docs, applicant });
+    // The exact checklist this application was filed against, so the admin sees
+    // the same uploaded/pending rows the applicant does.
+    const requiredDocuments = await resolveRequiredDocsForRequest(
+      request.serviceSlug,
+      request.serviceTitle,
+      request.formData
+    );
+
+    return res.status(200).json({ ...request, documents: docs, requiredDocuments, applicant });
   } catch (error: any) {
     console.error("Admin get registration detail error:", error);
     return res.status(500).json({ error: "Failed to fetch registration details" });

@@ -12,6 +12,9 @@
     "db:seed:catalog": "tsx src/scripts/seed-catalog.ts",
     "db:backfill:registrations": "tsx src/scripts/backfill-registrations.ts",
     "db:fix-notifications": "tsx src/scripts/align-notifications.ts",
+    "db:add-doc-labels": "tsx src/scripts/add-document-labels.ts",
+    "test:doc-checklist": "tsx src/scripts/test-document-checklist.ts",
+    "db:cleanup-checklist-test": "tsx src/scripts/cleanup-checklist-test-data.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

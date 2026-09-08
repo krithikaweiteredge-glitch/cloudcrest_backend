@@ -122,8 +122,80 @@ export async function createServiceRequest(req: AuthenticatedRequest, res: Respo
 }
 
 // 2. LIST SERVICE REQUESTS FOR LOGGED IN USER
-/** Helper to resolve required document types for a service request from the database catalog. */
-async function resolveRequiredDocsForRequest(serviceSlug: string, serviceTitle: string): Promise<string[]> {
+
+/** Read the checklist heading a file is being filed against, from a multipart body. */
+function readDocLabel(body: any): string {
+  const raw =
+    (body && typeof body.label === "string" ? body.label : "") ||
+    (body && typeof body.docLabel === "string" ? body.docLabel : "") ||
+    (body && typeof body.documentType === "string" ? body.documentType : "");
+  return raw.trim().slice(0, 512);
+}
+
+/** The exact checklist the applicant saw at submission, snapshotted on the request. */
+export function requiredDocsFromFormData(formData: string | null | undefined): string[] | null {
+  if (!formData) return null;
+  try {
+    const fd = typeof formData === "string" ? JSON.parse(formData) : formData;
+    const list = fd?.requiredDocuments;
+    if (Array.isArray(list)) {
+      const cleaned = list.filter((d: unknown): d is string => typeof d === "string" && d.trim().length > 0);
+      if (cleaned.length > 0) return cleaned;
+    }
+  } catch (_) {}
+  return null;
+}
+
+/**
+ * Resolve the required-document checklist for a request.
+ *
+ * The snapshot stored on the request at submission wins: it is the exact list
+ * of headings the applicant uploaded against, so the customer view and the
+ * admin view agree with each other and with what was actually asked for. Only
+ * when a request predates that snapshot do we fall back to the live catalog and
+ * then to a per-service default.
+ */
+/**
+ * Catalog checklists, cached per slug for a short window. The admin list
+ * resolves one checklist per registration, and requests filed before the
+ * snapshot existed all fall through to the catalog — without this, listing a
+ * few hundred of them would issue a query per row.
+ */
+const catalogDocsCache = new Map<string, { docs: string[]; at: number }>();
+const CATALOG_DOCS_TTL_MS = 60_000;
+
+async function catalogDocsForSlug(slug: string): Promise<string[]> {
+  const cached = catalogDocsCache.get(slug);
+  if (cached && Date.now() - cached.at < CATALOG_DOCS_TTL_MS) return cached.docs;
+
+  const [serviceRow] = await db
+    .select({ id: services.id })
+    .from(services)
+    .where(eq(services.slug, slug))
+    .limit(1);
+
+  let docs: string[] = [];
+  if (serviceRow) {
+    const docTypes = await db
+      .select({ name: documentTypes.name })
+      .from(documentTypes)
+      .where(eq(documentTypes.serviceId, serviceRow.id))
+      .orderBy(asc(documentTypes.id));
+    docs = docTypes.map((d) => d.name);
+  }
+
+  catalogDocsCache.set(slug, { docs, at: Date.now() });
+  return docs;
+}
+
+export async function resolveRequiredDocsForRequest(
+  serviceSlug: string,
+  serviceTitle: string,
+  formData?: string | null
+): Promise<string[]> {
+  const snapshot = requiredDocsFromFormData(formData);
+  if (snapshot) return snapshot;
+
   try {
     const slugsToTry = [serviceSlug];
     if (serviceSlug && serviceSlug.startsWith("company-")) slugsToTry.push("company");
@@ -131,23 +203,8 @@ async function resolveRequiredDocsForRequest(serviceSlug: string, serviceTitle: 
 
     for (const slug of slugsToTry) {
       if (!slug) continue;
-      const [serviceRow] = await db
-        .select({ id: services.id })
-        .from(services)
-        .where(eq(services.slug, slug))
-        .limit(1);
-
-      if (serviceRow) {
-        const docTypes = await db
-          .select({ name: documentTypes.name })
-          .from(documentTypes)
-          .where(eq(documentTypes.serviceId, serviceRow.id))
-          .orderBy(asc(documentTypes.id));
-
-        if (docTypes.length > 0) {
-          return docTypes.map((d) => d.name);
-        }
-      }
+      const docs = await catalogDocsForSlug(slug);
+      if (docs.length > 0) return docs;
     }
   } catch (err) {
     console.error("Error resolving required docs from DB:", err);
@@ -226,7 +283,7 @@ export async function listServiceRequests(req: AuthenticatedRequest, res: Respon
           .where(eq(requestDocuments.requestId, item.id))
           .orderBy(desc(requestDocuments.createdAt));
 
-        const requiredDocs = await resolveRequiredDocsForRequest(item.serviceSlug, item.serviceTitle);
+        const requiredDocs = await resolveRequiredDocsForRequest(item.serviceSlug, item.serviceTitle, item.formData);
 
         // Surface the snapshotted fee total (stored inside formData) so the
         // orders list shows the real amount rather than a placeholder.
@@ -283,7 +340,7 @@ export async function getServiceRequestById(req: AuthenticatedRequest, res: Resp
       .where(eq(requestDocuments.requestId, requestId))
       .orderBy(desc(requestDocuments.createdAt));
 
-    const requiredDocs = await resolveRequiredDocsForRequest(request.serviceSlug, request.serviceTitle);
+    const requiredDocs = await resolveRequiredDocsForRequest(request.serviceSlug, request.serviceTitle, request.formData);
 
     return res.status(200).json({
       ...request,
@@ -329,8 +386,7 @@ export async function uploadRequestDocument(req: AuthenticatedRequest, res: Resp
     }
 
     const savedDocs = [];
-    const docLabel = (req.body && typeof req.body.label === "string" ? req.body.label.trim() : "") ||
-                     (req.body && typeof req.body.documentType === "string" ? req.body.documentType.trim() : "");
+    const docLabel = readDocLabel(req.body);
     for (const f of files) {
       const storagePath = await saveUpload(f);
       const name = docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname;
@@ -340,6 +396,10 @@ export async function uploadRequestDocument(req: AuthenticatedRequest, res: Resp
           requestId,
           userId,
           name,
+          // The checklist heading is stored in its own column so the "uploaded
+          // vs pending" list matches on identity rather than guessing from the
+          // file name.
+          docLabel: docLabel || null,
           sizeBytes: f.size,
           storagePath,
           mimeType: f.mimetype,
@@ -772,8 +832,7 @@ export async function uploadVaultDocument(req: AuthenticatedRequest, res: Respon
     }
 
     const savedDocs = [];
-    const docLabel = (req.body && typeof req.body.label === "string" ? req.body.label.trim() : "") ||
-                     (req.body && typeof req.body.documentType === "string" ? req.body.documentType.trim() : "");
+    const docLabel = readDocLabel(req.body);
     for (const f of files) {
       const storagePath = await saveUpload(f);
       const name = docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname;
@@ -781,6 +840,7 @@ export async function uploadVaultDocument(req: AuthenticatedRequest, res: Respon
         requestId: null,
         userId,
         name,
+        docLabel: docLabel || null,
         sizeBytes: f.size,
         storagePath,
         mimeType: f.mimetype,
@@ -834,11 +894,15 @@ export async function linkVaultDocuments(req: AuthenticatedRequest, res: Respons
         if (!cleanName) cleanName = existing.name;
 
         const newName = targetLabel ? `${targetLabel} :: ${cleanName}` : cleanName;
+        // Attaching a vault file against a specific checklist row wins; if the
+        // caller didn't name one, keep whatever heading the vault copy carries.
+        const linkedLabel = targetLabel || existing.docLabel || null;
 
         await db.insert(requestDocuments).values({
           requestId,
           userId,
           name: newName,
+          docLabel: linkedLabel,
           sizeBytes: existing.sizeBytes,
           storagePath: existing.storagePath,
           mimeType: existing.mimeType,
