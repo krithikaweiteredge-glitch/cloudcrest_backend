@@ -169,4 +169,81 @@ export const REGISTRATION_CATALOG: Record<string, RegistrationCatalogEntry> = {
       "Cancelled cheque or first page of the bank statement (70% RERA account)",
     ],
   },
+
+  // -------------------------------------------------------------------------
+  // DSC — source: "DSC.docx". Client price: 2000 (Normal) / 4000 (Combo) + 18% GST.
+  // -------------------------------------------------------------------------
+  dsc: {
+    name: "Digital Signature Certificate",
+    shortTitle: "DSC",
+    authority: "Certifying Authority (CCA)",
+    formNo: "Class 3 DSC",
+    icon: "FileBadge2",
+    professionalFee: 2000,
+    govtFee: 0,
+    gstPercent: 18,
+    description:
+      "A Digital Signature Certificate (DSC) is a secure electronic signature issued by a Certifying Authority (CA) licensed by the Controller of Certifying Authorities (CCA) under the Information Technology Act, 2000. It authenticates the identity of the holder and is legally equivalent to a physical handwritten signature.\n\n" +
+      "DSC is mandatory for e-filing on the MCA portal (SPICe+, AGILE-PRO, etc.), Income Tax e-filing, GST filings, and other government portals. It ensures the security, authenticity, and integrity of electronic documents.",
+    whoCanApply:
+      "Any individual or organization requiring digital signing and authentication for statutory filings, including:\n" +
+      "• Indian individuals (residents & NRIs)\n" +
+      "• Directors / Designated Partners of companies and LLPs\n" +
+      "• Proprietors, Partners, and Authorized Signatories of businesses\n" +
+      "• Foreign nationals and foreign entities (with additional attestation requirements)\n" +
+      "• Professionals (CAs, CSs, lawyers, etc.) requiring DSC for official filings",
+    documents: [
+      "PAN Card (mandatory)",
+      "Aadhaar Card (for eKYC verification)",
+      "Recent passport-size colour photograph",
+      "GST Certificate (for Combo DSC)",
+    ],
+  },
+  "dsc-normal": {
+    name: "Normal DSC",
+    shortTitle: "Normal DSC",
+    authority: "Certifying Authority (CCA)",
+    formNo: "Class 3 DSC",
+    icon: "FileBadge2",
+    professionalFee: 2000,
+    govtFee: 0,
+    gstPercent: 18,
+    description:
+      "A Digital Signature Certificate (DSC) is a secure electronic signature issued by a Certifying Authority (CA) licensed by the Controller of Certifying Authorities (CCA) under the Information Technology Act, 2000. It authenticates the identity of the holder and is legally equivalent to a physical handwritten signature.\n\nDSC is mandatory for e-filing on the MCA portal (SPICe+, AGILE-PRO, etc.), Income Tax e-filing, GST filings, and other government portals. It ensures the security, authenticity, and integrity of electronic documents.",
+    whoCanApply:
+      "• Indian individuals (residents & NRIs)\n" +
+      "• Directors / Designated Partners of companies and LLPs\n" +
+      "• Proprietors, Partners, and Authorized Signatories of businesses\n" +
+      "• Foreign nationals and foreign entities (with additional attestation requirements)\n" +
+      "• Professionals (CAs, CSs, lawyers, etc.) requiring DSC for official filings",
+    documents: [
+      "PAN Card (mandatory)",
+      "Aadhaar Card (for eKYC verification)",
+      "Recent passport-size colour photograph",
+    ],
+  },
+  "dsc-combo": {
+    name: "Combo DSC",
+    shortTitle: "Combo DSC",
+    authority: "Certifying Authority (CCA)",
+    formNo: "Class 3 DSC",
+    icon: "FileBadge2",
+    professionalFee: 4000,
+    govtFee: 0,
+    gstPercent: 18,
+    description:
+      "A Digital Signature Certificate (DSC) is a secure electronic signature issued by a Certifying Authority (CA) licensed by the Controller of Certifying Authorities (CCA) under the Information Technology Act, 2000. It authenticates the identity of the holder and is legally equivalent to a physical handwritten signature.\n\nA Class 3 Combo DSC contains dual certificates: a Signing certificate for digital signatures and an Encryption certificate for secure data transmission. Required for government e-tendering portals, GST filings, and foreign trade authentication.",
+    whoCanApply:
+      "• Indian individuals (residents & NRIs)\n" +
+      "• Directors / Designated Partners of companies and LLPs\n" +
+      "• Proprietors, Partners, and Authorized Signatories of businesses\n" +
+      "• Foreign nationals and foreign entities (with additional attestation requirements)\n" +
+      "• Professionals (CAs, CSs, lawyers, etc.) requiring DSC for official filings",
+    documents: [
+      "PAN Card (mandatory)",
+      "Aadhaar Card (for eKYC verification)",
+      "Recent passport-size colour photograph",
+      "GST Certificate (extra required for organisation combo DSC)",
+    ],
+  },
 };
