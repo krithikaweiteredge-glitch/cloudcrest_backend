@@ -19,14 +19,22 @@
  *   - wizard_rules                                         only when unset
  *   - document_types                                       only when the service has none
  *   - documents_count (home-card chip)                     only when unset
- *   - fee_lines                                            only when the service has none
- * The professional / govt / GST columns are never touched. Safe to run more than once.
+ *   - fee_lines (+ professional_fee, as the admin editor saves it)  only when the service has none
+ * Safe to run more than once.
  */
 import { db, pool } from "../config/db.js";
 import { services, documentTypes } from "../models/schema.js";
 import { eq } from "drizzle-orm";
 import { CONVERSION_CATALOG } from "../config/conversionCatalog.js";
 
+/**
+ * What the admin editor writes to professional_fee when it saves fee lines: the
+ * "Professional Fee" line if there is one, otherwise the lines' total. Keeping
+ * the column in step makes the admin list show the same price the editor would.
+ */
+const listPrice = (lines: { label: string; amount: number }[]) =>
+  (lines.find((l) => /professional/i.test(l.label))?.amount ??
+    lines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0)).toFixed(2);
 const isEmpty = (v: string | null | undefined) => !v || v.trim() === "" || v.trim() === "—";
 
 async function run() {
@@ -83,6 +91,7 @@ async function run() {
     const hasFeeLines = !!row.feeLines && row.feeLines.trim() !== "" && row.feeLines.trim() !== "[]";
     if (!hasFeeLines && entry.feeLines && entry.feeLines.length > 0) {
       patch.feeLines = JSON.stringify(entry.feeLines);
+      patch.professionalFee = listPrice(entry.feeLines);
       plan.push(`fee lines (${entry.feeLines.map((l) => `${l.label} ₹${l.amount}`).join(", ")})`);
     }
 
