@@ -132,6 +132,16 @@ function readDocLabel(body: any): string {
   return raw.trim().slice(0, 512);
 }
 
+/**
+ * `request_documents.name` is varchar(255). Checklist headings can run past a
+ * hundred characters, so heading + " :: " + file name overflows it and the
+ * insert fails. The heading is also stored whole in `doc_label`, which is what
+ * the checklist matches on, so trimming the display name loses nothing.
+ */
+function fitDocName(name: string): string {
+  return name.length <= 255 ? name : name.slice(0, 255);
+}
+
 /** The exact checklist the applicant saw at submission, snapshotted on the request. */
 export function requiredDocsFromFormData(formData: string | null | undefined): string[] | null {
   if (!formData) return null;
@@ -389,7 +399,7 @@ export async function uploadRequestDocument(req: AuthenticatedRequest, res: Resp
     const docLabel = readDocLabel(req.body);
     for (const f of files) {
       const storagePath = await saveUpload(f);
-      const name = docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname;
+      const name = fitDocName(docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname);
       const [inserted] = await db
         .insert(requestDocuments)
         .values({
@@ -835,7 +845,7 @@ export async function uploadVaultDocument(req: AuthenticatedRequest, res: Respon
     const docLabel = readDocLabel(req.body);
     for (const f of files) {
       const storagePath = await saveUpload(f);
-      const name = docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname;
+      const name = fitDocName(docLabel ? `${docLabel} :: ${f.originalname}` : f.originalname);
       const docValues = {
         requestId: null,
         userId,
@@ -893,7 +903,7 @@ export async function linkVaultDocuments(req: AuthenticatedRequest, res: Respons
         }
         if (!cleanName) cleanName = existing.name;
 
-        const newName = targetLabel ? `${targetLabel} :: ${cleanName}` : cleanName;
+        const newName = fitDocName(targetLabel ? `${targetLabel} :: ${cleanName}` : cleanName);
         // Attaching a vault file against a specific checklist row wins; if the
         // caller didn't name one, keep whatever heading the vault copy carries.
         const linkedLabel = targetLabel || existing.docLabel || null;
