@@ -11,6 +11,7 @@
     "db:seed:admin": "tsx seed-admin.ts",
     "db:seed:catalog": "tsx src/scripts/seed-catalog.ts",
     "db:backfill:registrations": "tsx src/scripts/backfill-registrations.ts",
+    "db:backfill:conversions": "tsx src/scripts/backfill-conversions.ts",
     "db:fix-notifications": "tsx src/scripts/align-notifications.ts",
     "db:add-doc-labels": "tsx src/scripts/add-document-labels.ts",
     "test:doc-checklist": "tsx src/scripts/test-document-checklist.ts",
