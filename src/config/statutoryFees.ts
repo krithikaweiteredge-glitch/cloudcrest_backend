@@ -146,8 +146,9 @@ function moaRegistrationFee(i: McaFeeInput): number {
   return 5000 + additional;
 }
 
-/** Generic MCA document-filing fee band by authorised capital. */
-function aoaBand(cap: number): number {
+/** Generic MCA document-filing fee band by authorised capital. Also the
+ *  per-form government fee for the conversion filings (MGT-14, INC-27, …). */
+export function aoaBand(cap: number): number {
   if (cap < 100000) return 200;
   if (cap < 500000) return 300;
   if (cap < 2500000) return 400;
@@ -317,7 +318,24 @@ export type LlpFeeContext = {
   jurisdiction?: "indian" | "foreign";
 };
 
-export type FeeContext = CompanyFeeContext | LlpFeeContext;
+/**
+ * A Business Conversion (`conversion-*` catalog service). Which inputs matter
+ * depends on the conversion's government-fee basis — see config/conversionFees.
+ */
+export type ConversionFeeContext = {
+  kind: "conversion";
+  slug: string;
+  /** Authorised share capital — drives the per-form filing slab and the SPICe+ fees. */
+  capital: number;
+  paidCapital: number;
+  /** Partner contribution — Partnership → LLP only. */
+  contribution: number;
+  directors: number;
+  partners: number;
+  state: string;
+};
+
+export type FeeContext = CompanyFeeContext | LlpFeeContext | ConversionFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -345,16 +363,8 @@ export function deriveOpcSmall(ctx: CompanyFeeContext): boolean {
   return ctx.paidCapital <= 40000000;
 }
 
-/** Compute the full customer-facing fee stack for a fee context. */
-export function computeFees(
-  ctx: FeeContext,
-  professionalFee: number,
-  customLines?: StatutoryLine[],
-): ComputedFees {
-  if (ctx.kind === "llp") {
-    const s = computeLlpStatutoryFees(ctx.contribution, ctx.partners);
-    return { ...withProfessionalAndGst(professionalFee, s.lines, customLines), stateKnown: true };
-  }
+/** The itemised SPICe+ government fees for a company incorporation. */
+export function companyStatutoryFees(ctx: CompanyFeeContext): McaStatutoryResult & { smallCompany: boolean } {
   const opcSmall = deriveOpcSmall(ctx);
   // A company limited by guarantee has no share capital: the fee is driven by the
   // number of members (Table I(II)) and authorised capital is treated as nil.
@@ -368,16 +378,52 @@ export function computeFees(
     section8: ctx.entity === "sec8",
     state: ctx.state,
   });
+  return { ...s, smallCompany: opcSmall };
+}
+
+/** Compute the full customer-facing fee stack for a company or LLP fee context. */
+export function computeFees(
+  ctx: CompanyFeeContext | LlpFeeContext,
+  professionalFee: number,
+  customLines?: StatutoryLine[],
+): ComputedFees {
+  if (ctx.kind === "llp") {
+    const s = computeLlpStatutoryFees(ctx.contribution, ctx.partners);
+    return { ...withProfessionalAndGst(professionalFee, s.lines, customLines), stateKnown: true };
+  }
+  const s = companyStatutoryFees(ctx);
   return {
     ...withProfessionalAndGst(professionalFee, s.lines, customLines),
     stateKnown: s.stateKnown,
-    smallCompany: opcSmall,
+    smallCompany: s.smallCompany,
   };
 }
 
 /** Validate + normalise an untrusted `{ kind, ... }` blob into a FeeContext. */
 export function parseFeeContext(raw: any): FeeContext | null {
   if (!raw || typeof raw !== "object") return null;
+  if (raw.kind === "conversion") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (!/^conversion-[a-z0-9-]+$/.test(slug)) return null;
+    // Figures the applicant hasn't entered yet count as nil rather than
+    // rejecting the context, so the fee step still shows the catalog lines.
+    const num = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const capital = num(raw.capital);
+    const paid = num(raw.paidCapital);
+    return {
+      kind: "conversion",
+      slug,
+      capital,
+      paidCapital: paid > 0 ? paid : capital,
+      contribution: num(raw.contribution),
+      directors: Math.floor(num(raw.directors)) || 2,
+      partners: Math.floor(num(raw.partners)) || 2,
+      state: typeof raw.state === "string" ? raw.state : "",
+    };
+  }
   if (raw.kind === "llp") {
     const contribution = Number(raw.contribution);
     if (!Number.isFinite(contribution) || contribution < 0) return null;
