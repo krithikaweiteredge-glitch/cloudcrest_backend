@@ -18,10 +18,13 @@
  * conversion stepper reads `wizardRules`, and the upload panel at submission
  * reads the document checklist.
  *
- * Fees: only the amounts the HTML's fee step actually states are carried — the
- * newspaper-advertisement cost on three conversions — as fee lines. It gives no
- * professional fee and no figure for the slab-based government fee, so those
- * are left for the admin to add to each row's fee lines.
+ * Fees come from the client's "Fee for conversions" document. The fixed
+ * amounts — Professional Fee, Newspaper Advertisement Cost, and GST (fixed at
+ * ₹1,340 by the document) — are the catalog fee lines below, written to the
+ * rows by `scripts/apply-conversion-fees.ts` and edited by the admin from then
+ * on. The government fee depends on the application (authorised capital,
+ * directors, state), so the backend computes it — see `config/conversionFees`.
+ * Proprietorship → Pvt is not in that document and keeps its own pricing.
  */
 
 /** Stored as JSON in `services.wizard_rules`; read by the frontend's resolveConversionRules. */
@@ -50,7 +53,7 @@ export type ConversionCatalogEntry = {
   actsRules: string;
   /** The HTML's "Required Documents" list for this type. */
   documents: string[];
-  /** Fee rows the HTML's fee step gives an amount for. */
+  /** The fixed fee lines from "Fee for conversions"; the government fee is computed. */
   feeLines?: { label: string; amount: number }[];
   rules: ConversionRules;
 };
@@ -66,6 +69,10 @@ export const CONVERSION_CATALOG: Record<string, ConversionCatalogEntry> = {
   // -------------------------------------------------------------------------
   "conversion-pvt-to-public": {
     formNo: "MGT-14 + INC-27",
+    feeLines: [
+      { label: "Professional Fee", amount: 7999 },
+      { label: "GST @ 18%", amount: 1340 },
+    ],
     description:
       "Conversion of a Private Limited Company into a Public Limited Company is carried out by altering the Articles of Association and passing a Special Resolution under the Companies Act, 2013. The conversion is completed by filing the prescribed forms with the Registrar of Companies (ROC).",
     whoCanApply: bullets(
@@ -119,7 +126,11 @@ export const CONVERSION_CATALOG: Record<string, ConversionCatalogEntry> = {
   // -------------------------------------------------------------------------
   "conversion-llp-to-pvt": {
     formNo: "URC-1 + SPICe+",
-    feeLines: [{ label: "Newspaper Advertisement Cost", amount: 7500 }],
+    feeLines: [
+      { label: "Professional Fee", amount: 7999 },
+      { label: "Newspaper Advertisement Cost", amount: 7500 },
+      { label: "GST @ 18%", amount: 1340 },
+    ],
     description:
       "Conversion of an LLP into a Private Limited Company is a process through which an eligible LLP is registered as a company under the Companies Act, 2013. The conversion is completed by filing the prescribed forms and documents with the Registrar of Companies (ROC).",
     whoCanApply: bullets(
@@ -171,7 +182,11 @@ export const CONVERSION_CATALOG: Record<string, ConversionCatalogEntry> = {
   // OPC → Private Limited. docx §3 + HTML `opc_pvt`.
   // -------------------------------------------------------------------------
   "conversion-opc-to-pvt": {
-    formNo: "INC-6 + MGT-14",
+    formNo: "DIR-12 + PAS-3 + MGT-14 + SH-7",
+    feeLines: [
+      { label: "Professional Fee", amount: 7999 },
+      { label: "GST @ 18%", amount: 1340 },
+    ],
     description:
       "Conversion of a One Person Company (OPC) into a Private Limited Company is carried out by complying with the applicable provisions of the Companies Act, 2013. The conversion involves meeting the requirements of a Private Limited Company and filing the prescribed forms with the Registrar of Companies (ROC).",
     whoCanApply: bullets(
@@ -271,7 +286,11 @@ export const CONVERSION_CATALOG: Record<string, ConversionCatalogEntry> = {
   // Private Limited → OPC. HTML `pvt_opc` only — no docx copy.
   // -------------------------------------------------------------------------
   "conversion-pvt-to-opc": {
-    formNo: "INC-6",
+    formNo: "DIR-12 + PAS-3 + MGT-14 + SH-4",
+    feeLines: [
+      { label: "Professional Fee", amount: 7999 },
+      { label: "GST @ 18%", amount: 1340 },
+    ],
     description: "",
     whoCanApply: bullets(
       "Company must have exactly 1 member at the time of conversion",
@@ -312,6 +331,10 @@ export const CONVERSION_CATALOG: Record<string, ConversionCatalogEntry> = {
   // -------------------------------------------------------------------------
   "conversion-partnership-to-llp": {
     formNo: "FiLLiP + Form 17",
+    feeLines: [
+      { label: "Professional Fee", amount: 7999 },
+      { label: "GST @ 18%", amount: 1340 },
+    ],
     description: "",
     whoCanApply: bullets(
       "Minimum 2 Designated Partners required",
@@ -345,7 +368,11 @@ export const CONVERSION_CATALOG: Record<string, ConversionCatalogEntry> = {
   // -------------------------------------------------------------------------
   "conversion-partnership-to-pvt": {
     formNo: "URC-1 + SPICe+",
-    feeLines: [{ label: "Newspaper Advertisement Cost", amount: 7500 }],
+    feeLines: [
+      { label: "Professional Fee", amount: 7999 },
+      { label: "Newspaper Advertisement Cost", amount: 7500 },
+      { label: "GST @ 18%", amount: 1340 },
+    ],
     description: "",
     whoCanApply: bullets(
       "Minimum 2 Partners/Directors required",
@@ -383,8 +410,12 @@ export const CONVERSION_CATALOG: Record<string, ConversionCatalogEntry> = {
   // its documents, so there is no checklist to import either.
   // -------------------------------------------------------------------------
   "conversion-public-to-pvt": {
-    formNo: "RD-1 + INC-27/INC-28",
-    feeLines: [{ label: "Newspaper Advertisement Cost", amount: 10000 }],
+    formNo: "MGT-14 + RD-1 + INC-28 + INC-27",
+    feeLines: [
+      { label: "Professional Fee", amount: 7999 },
+      { label: "Newspaper Advertisement Cost", amount: 7500 },
+      { label: "GST @ 18%", amount: 1340 },
+    ],
     description: "",
     whoCanApply: bullets(
       "Members restricted to max 200",
