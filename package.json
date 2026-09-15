@@ -14,6 +14,7 @@
     "db:backfill:conversions": "tsx src/scripts/backfill-conversions.ts",
     "db:apply:conversion-fees": "tsx src/scripts/apply-conversion-fees.ts",
     "db:backfill:closures": "tsx src/scripts/backfill-closures.ts",
+    "db:apply:closure-fees": "tsx src/scripts/apply-closure-fees.ts",
     "db:fix-notifications": "tsx src/scripts/align-notifications.ts",
     "db:add-doc-labels": "tsx src/scripts/add-document-labels.ts",
     "test:doc-checklist": "tsx src/scripts/test-document-checklist.ts",

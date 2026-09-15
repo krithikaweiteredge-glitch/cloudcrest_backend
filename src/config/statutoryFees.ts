@@ -335,7 +335,18 @@ export type ConversionFeeContext = {
   state: string;
 };
 
-export type FeeContext = CompanyFeeContext | LlpFeeContext | ConversionFeeContext;
+/**
+ * A Business Closure (`closure-*` catalog service). Only the company closures
+ * use the capital — for the MGT-14 filing slab; see config/closureFees.
+ */
+export type ClosureFeeContext = {
+  kind: "closure";
+  slug: string;
+  /** Existing authorised share capital. */
+  capital: number;
+};
+
+export type FeeContext = CompanyFeeContext | LlpFeeContext | ConversionFeeContext | ClosureFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -402,6 +413,13 @@ export function computeFees(
 /** Validate + normalise an untrusted `{ kind, ... }` blob into a FeeContext. */
 export function parseFeeContext(raw: any): FeeContext | null {
   if (!raw || typeof raw !== "object") return null;
+  if (raw.kind === "closure") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (!/^closure-[a-z0-9-]+$/.test(slug)) return null;
+    // Capital not entered yet counts as nil, so the fee step still shows the catalog lines.
+    const capital = Number(raw.capital);
+    return { kind: "closure", slug, capital: Number.isFinite(capital) && capital > 0 ? capital : 0 };
+  }
   if (raw.kind === "conversion") {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
     if (!/^conversion-[a-z0-9-]+$/.test(slug)) return null;
