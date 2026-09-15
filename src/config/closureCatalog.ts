@@ -29,12 +29,18 @@
  * Sub-type rows are created inactive, like the company wizard's entity types,
  * so they don't appear as separate sidebar entries.
  *
- * Fees: only a flat rupee amount the sources state outright becomes a fee line
- * (STK-2 ₹10,000; INC-18 ₹2,000). Amounts that depend on something the form
- * doesn't ask — the MGT-14 capital slabs, the Small / other LLP fee — are kept
- * as the sources write them, in a Fees tab on the service page.
+ * Fees come from the client's "Fee and changes required in closures" document.
+ * The fixed amounts — Professional Fee, GST (stated as a fixed amount), STK-2
+ * ₹10,000, LLP Form 24 ₹3,000 — are the fee lines below, written to the rows by
+ * `scripts/apply-closure-fees.ts` and edited by the admin from then on. MGT-14
+ * depends on the authorised capital the closure form asks for, so the backend
+ * computes it — see `config/closureFees`. The Section 8 routes aren't in that
+ * document and keep their earlier INC-18 line.
  *
- * Proprietorship closure is in the catalog but in neither document nor the
+ * The same document supplies the About copy for Nidhi and Public Trust, which
+ * the earlier sources left empty.
+ *
+ * Proprietorship closure is in the catalog but in none of the documents nor the
  * HTML, so it has no entry here.
  */
 
@@ -112,42 +118,29 @@ const companyDocuments = (isOpc: boolean) => [
   "Any other documents/information as may be required by ROC/MCA",
 ];
 
-const STK2_FEE = { label: "Form STK-2 – Government Fee", amount: 10000 };
+/** "Fee and changes required in closures" — every company closure (Pvt, Public, OPC, Nidhi). */
+const COMPANY_FEE_LINES = [
+  { label: "Professional Fee", amount: 10000 },
+  { label: "GST @ 18%", amount: 1800 },
+  { label: "Form STK-2 – Government Fee", amount: 10000 },
+];
 
-const companyFeesTab = (isOpc: boolean): ClosureTab => ({
-  title: "Fees",
-  content: isOpc
-    ? bullets("Form STK-2 — ₹10,000")
-    : paras(
-        bullets("Form STK-2 — ₹10,000"),
-        "Form MGT-14 (based on nominal share capital):\n" +
-          bullets(
-            "Nominal share capital up to ₹1,00,000 — ₹200",
-            "₹1,00,001 to ₹5,00,000 — ₹300",
-            "₹5,00,001 to ₹10,00,000 — ₹400",
-            "₹10,00,001 to ₹50,00,000 — ₹500",
-            "₹50,00,001 to ₹1 crore — ₹600",
-          ),
-        "Late fee for filing of MGT-14:\n" +
-          bullets(
-            "Up to 30 days — 2 × Normal Fee",
-            "More than 30 days and up to 60 days — 4 × Normal Fee",
-            "More than 60 days and up to 90 days — 6 × Normal Fee",
-            "More than 90 days and up to 180 days — 10 × Normal Fee",
-            "More than 180 days — 12 × Normal Fee",
-          ),
-      ),
-});
-
+// No Fees tab on the service page: the fee lines above and the MGT-14 slab the
+// backend computes are shown in the application's fee step.
 const companyEntry = (isOpc: boolean): ClosureCatalogEntry => ({
-  formNo: "STK-2",
+  formNo: "STK-2 + MGT-14",
   description: COMPANY_ABOUT,
   whoCanApply: COMPANY_WHO,
   actsRules: "",
   documents: companyDocuments(isOpc),
-  extraTabs: [{ title: "Who is Ineligible?", content: COMPANY_INELIGIBLE, afterWho: true }, companyFeesTab(isOpc)],
-  feeLines: [STK2_FEE],
+  extraTabs: [{ title: "Who is Ineligible?", content: COMPANY_INELIGIBLE, afterWho: true }],
+  feeLines: COMPANY_FEE_LINES,
 });
+
+const flatFee = (professional: number, gst: number) => [
+  { label: "Professional Fee", amount: professional },
+  { label: "GST @ 18%", amount: gst },
+];
 
 export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
   "closure-pvt": companyEntry(false),
@@ -203,12 +196,8 @@ export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
       "Copy of the initial LLP Agreement and subsequent amendments, where required",
       "Any other documents/information required by the ROC/MCA",
     ],
-    extraTabs: [
-      {
-        title: "MCA Fee",
-        content: bullets("Small LLP — ₹500", "Other than Small LLP — ₹1,000"),
-      },
-    ],
+    // The fee document removes the old Small / other LLP "MCA Fee" tab.
+    feeLines: [...flatFee(10000, 1800), { label: "Form 24 – Government Fee", amount: 3000 }],
   },
 
   // -------------------------------------------------------------------------
@@ -440,12 +429,12 @@ export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
       "Bank Account Closure Request",
       "Surrender Items",
     ],
+    feeLines: flatFee(5999, 1080),
   },
 
   // -------------------------------------------------------------------------
   // Trust — KAVYA.docx "Trust Dissolution: Public Trusts / Private Trusts".
-  // The base row becomes the type picker. Neither source prices trust
-  // dissolution, so the two types start with no fee for the admin to set.
+  // The base row becomes the type picker; each type carries its own fee.
   // -------------------------------------------------------------------------
   "closure-trust": {
     // The HTML's own subtitle for the trust card.
@@ -459,8 +448,12 @@ export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
     parent: "closure-trust",
     name: "Public Trust",
     shortTitle: "Public Trust",
-    // The docx has an "About" heading for the public trust with nothing under it.
-    description: "",
+    // KAVYA.docx left "About" empty; the fee document supplies it.
+    description: paras(
+      "This approval relates to the dissolution or closure of a Public Trust under the applicable State Public Trusts Act and the Indian Trusts Act, 1882 (where applicable).",
+      "A Public Trust may be closed when its objects have been fulfilled, it has become impossible or impracticable to carry out the trust purposes, the trust property has been exhausted, or the trustees and beneficiaries agree that the trust should be terminated. The process generally requires the sanction of the Charity Commissioner (or the competent Court) to ensure that the interests of beneficiaries are protected and that the trust property is properly accounted for and disposed of in accordance with law.",
+      "Once approved, the trust is dissolved, its registration is cancelled, and the remaining assets (if any) are applied as directed by the Charity Commissioner or the Court.",
+    ),
     whoCanApply: bullets(
       "The Board of Trustees",
       "The Charity Commissioner or Court",
@@ -479,6 +472,7 @@ export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
       "Formal Petition / Application: Filed with the state Charity Commissioner or District Court seeking judicial or regulatory sanction for asset transfer",
       "Tax Deregistration Papers: Applications to cancel 12A/80G and FCRA registrations, alongside the final income tax return (ITR-7)",
     ],
+    feeLines: flatFee(10000, 1800),
   },
 
   "closure-trust-private": {
@@ -507,6 +501,7 @@ export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
       "No-Objection Certificates (NOC)",
       "Tax Surrender Documentation",
     ],
+    feeLines: flatFee(10000, 1800),
   },
 
   // -------------------------------------------------------------------------
@@ -533,14 +528,20 @@ export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
       "Asset Distribution Plan",
       "Surrender Applications",
     ],
+    feeLines: flatFee(10000, 1800),
   },
 
   // -------------------------------------------------------------------------
-  // Nidhi Company — KAVYA.docx "Closure of Nidhi company". The docx has no
-  // About section for Nidhi.
+  // Nidhi Company — KAVYA.docx "Closure of Nidhi company"; its About, fees and
+  // company-style form (registry search, authorised capital) come from the fee
+  // document.
   // -------------------------------------------------------------------------
   "closure-nidhi": {
-    description: "",
+    formNo: "STK-2 + MGT-14",
+    description: paras(
+      "This approval pertains to the voluntary removal (strike-off) of the name of a Nidhi Company from the Register of Companies under Section 248(2) of the Companies Act, 2013.",
+      "A Nidhi Company may apply for this approval after it has ceased business operations, fully repaid all member deposits (including interest), extinguished all liabilities, and has no remaining assets. Once approved by the Registrar of Companies, the company's name is struck off the register and the company stands dissolved.",
+    ),
     whoCanApply: bullets(
       "The Board of Directors",
       "The Shareholders (Members)",
@@ -563,5 +564,6 @@ export const CLOSURE_CATALOG: Record<string, ClosureCatalogEntry> = {
       "MCA Regulatory Forms: Filed applications including Form MGT-14, Form INC-28, or Form STK-2 along with fee challans",
       "Banking & Tax Surrender Papers",
     ],
+    feeLines: COMPANY_FEE_LINES,
   },
 };

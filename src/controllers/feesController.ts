@@ -8,14 +8,14 @@ import {
   parseFeeContext,
   type FeeContext,
   type ComputedFees,
-  type ConversionFeeContext,
   type StatutoryLine,
 } from "../config/statutoryFees.js";
 import { conversionStatutoryFees } from "../config/conversionFees.js";
+import { closureStatutoryFees } from "../config/closureFees.js";
 
 /** The catalog slugs to try, in priority order, for a fee context's professional fee. */
 export function slugsForContext(ctx: FeeContext): string[] {
-  if (ctx.kind === "conversion") return [ctx.slug];
+  if (ctx.kind === "conversion" || ctx.kind === "closure") return [ctx.slug];
   if (ctx.kind === "llp") {
     // Indian vs Foreign LLP carry different professional fees, priced on their own
     // rows; fall back to the base `llp` row if a per-type row isn't set up yet.
@@ -65,13 +65,15 @@ export async function professionalFeeForSlugs(
 }
 
 /**
- * A conversion's fee stack: the catalog row's fee lines as authored (the admin
- * owns every amount on them, GST included), followed by the government fee the
- * backend computes from the application. A row with no fee lines falls back to
- * its professional / govt / GST% columns, as the catalog pricing does elsewhere.
+ * A conversion's or closure's fee stack: the catalog row's fee lines as authored
+ * (the admin owns every amount on them, GST included), followed by the
+ * government fee the backend computed from the application. A row with no fee
+ * lines falls back to its professional / govt / GST% columns, as the catalog
+ * pricing does elsewhere.
  */
-async function resolveConversionFees(
-  ctx: ConversionFeeContext,
+async function resolveCatalogPricedFees(
+  slug: string,
+  statutory: { lines: StatutoryLine[]; stateKnown: boolean },
 ): Promise<ComputedFees & { fromCatalog: boolean }> {
   const [row] = await db
     .select({
@@ -81,7 +83,7 @@ async function resolveConversionFees(
       feeLines: services.feeLines,
     })
     .from(services)
-    .where(eq(services.slug, ctx.slug))
+    .where(eq(services.slug, slug))
     .limit(1);
 
   let catalogLines: StatutoryLine[] = [];
@@ -114,7 +116,6 @@ async function resolveConversionFees(
     }
   }
 
-  const statutory = conversionStatutoryFees(ctx);
   const lines = [...catalogLines, ...statutory.lines];
   return {
     lines,
@@ -133,7 +134,10 @@ async function resolveConversionFees(
 export async function resolveRequestFees(
   ctx: FeeContext,
 ): Promise<ComputedFees & { fromCatalog: boolean }> {
-  if (ctx.kind === "conversion") return resolveConversionFees(ctx);
+  if (ctx.kind === "conversion") return resolveCatalogPricedFees(ctx.slug, conversionStatutoryFees(ctx));
+  if (ctx.kind === "closure") {
+    return resolveCatalogPricedFees(ctx.slug, { lines: closureStatutoryFees(ctx), stateKnown: true });
+  }
   const { fee, customLines, fromCatalog } = await professionalFeeForSlugs(slugsForContext(ctx));
   return { ...computeFees(ctx, fee, customLines), fromCatalog };
 }
