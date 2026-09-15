@@ -634,7 +634,7 @@ const CATALOG: SeedGroup[] = [
     category: "Labour & Municipal License",
     subcategory: "Labour Registrations",
     services: [
-      svc("labour-licence", "Labour Licence", "Labour Licence", "State Labour Dept.", "CLRA", "HardHat", [
+      svc("labour-licence", "Labour Licence", "Labour Licence", "State Labour Dept.", "", "HardHat", [
         "Certificate of incorporation",
         "PAN of establishment",
         "Address proof",

@@ -9,7 +9,10 @@
  *   - fee_lines (+ professional_fee, as the admin editor saves it) — REPLACED,
  *     since this is the client's price list;
  *   - document_types — inserted only when the row has none, so an admin-curated
- *     checklist is never duplicated or replaced.
+ *     checklist is never duplicated or replaced;
+ *   - form_no — cleared on the base row and the state rows. The document names
+ *     no form, and the "CLRA" the base row was seeded with (the Contract Labour
+ *     Act) doesn't describe this registration; the page shows no Form chip.
  *
  * The government fee is not written — the backend computes it per application
  * from the state and head count (`config/labourFees.ts`).
@@ -39,6 +42,12 @@ async function run() {
   }
 
   let touched = 0;
+  if (base.formNo) {
+    console.log(`  ${apply ? "updated  " : "would set"} ${LABOUR_BASE_SLUG}
+      form no:   ${base.formNo}  →  (none)`);
+    if (apply) await db.update(services).set({ formNo: null }).where(eq(services.id, base.id));
+  }
+
   for (const [slug, entry] of Object.entries(LABOUR_CATALOG)) {
     let [row] = await db.select().from(services).where(eq(services.slug, slug)).limit(1);
     const plan: string[] = [];
@@ -54,7 +63,7 @@ async function run() {
             shortTitle: `Labour Licence · ${entry.state}`,
             slug,
             authority: base.authority,
-            formNo: base.formNo,
+            formNo: null,
             icon: base.icon,
             active: false,
             professionalFee: "0",
@@ -73,6 +82,7 @@ async function run() {
       /* shown as (none) */
     }
     plan.push(`fee lines: ${describe(current)}  →  ${describe(entry.feeLines)}`);
+    if (row?.formNo) plan.push(`form no:   ${row.formNo}  →  (none)`);
 
     const existingDocs = row
       ? await db.select({ id: documentTypes.id }).from(documentTypes).where(eq(documentTypes.serviceId, row.id))
@@ -89,6 +99,7 @@ async function run() {
       .update(services)
       .set({
         feeLines: JSON.stringify(entry.feeLines),
+        formNo: null,
         // The admin list shows this column as the service's price.
         professionalFee: (entry.feeLines.find((l) => /professional/i.test(l.label))?.amount ?? 0).toFixed(2),
         ...(insertDocs ? { documentsCount: entry.documents.length } : {}),
