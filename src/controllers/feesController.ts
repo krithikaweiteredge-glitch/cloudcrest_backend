@@ -12,10 +12,11 @@ import {
 } from "../config/statutoryFees.js";
 import { conversionStatutoryFees } from "../config/conversionFees.js";
 import { closureStatutoryFees } from "../config/closureFees.js";
+import { labourStatutoryFees } from "../config/labourFees.js";
 
 /** The catalog slugs to try, in priority order, for a fee context's professional fee. */
 export function slugsForContext(ctx: FeeContext): string[] {
-  if (ctx.kind === "conversion" || ctx.kind === "closure") return [ctx.slug];
+  if (ctx.kind === "conversion" || ctx.kind === "closure" || ctx.kind === "labour") return [ctx.slug];
   if (ctx.kind === "llp") {
     // Indian vs Foreign LLP carry different professional fees, priced on their own
     // rows; fall back to the base `llp` row if a per-type row isn't set up yet.
@@ -138,6 +139,7 @@ export async function resolveRequestFees(
   if (ctx.kind === "closure") {
     return resolveCatalogPricedFees(ctx.slug, { lines: closureStatutoryFees(ctx), stateKnown: true });
   }
+  if (ctx.kind === "labour") return resolveCatalogPricedFees(ctx.slug, labourStatutoryFees(ctx));
   const { fee, customLines, fromCatalog } = await professionalFeeForSlugs(slugsForContext(ctx));
   return { ...computeFees(ctx, fee, customLines), fromCatalog };
 }

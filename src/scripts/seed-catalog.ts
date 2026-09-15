@@ -641,6 +641,9 @@ const CATALOG: SeedGroup[] = [
         "List of workers / contract labour",
         "Consent of principal employer",
       ]),
+      // Registered state-wise like the entity registrations above: one inactive
+      // row per state, authored by the admin (content: db:backfill:labour-licence).
+      ...stateCombos("labour-licence", "Labour Licence", "State Labour Dept.", "HardHat"),
       svc("epf", "EPF Registration", "EPF", "EPFO", "Form-1", "Coins", [
         "PAN of establishment",
         "Certificate of incorporation",
