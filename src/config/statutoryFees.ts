@@ -346,7 +346,26 @@ export type ClosureFeeContext = {
   capital: number;
 };
 
-export type FeeContext = CompanyFeeContext | LlpFeeContext | ConversionFeeContext | ClosureFeeContext;
+/**
+ * A Labour Licence (Shops & Establishments registration) in one state — the
+ * `labour-licence-<state>` catalog row. The government fee is the state's slab
+ * on the number of persons employed; see config/labourFees.
+ */
+export type LabourFeeContext = {
+  kind: "labour";
+  slug: string;
+  /** Telangana / Andhra Pradesh / Karnataka. */
+  state: string;
+  /** Total persons employed (male + female + others). */
+  employees: number;
+};
+
+export type FeeContext =
+  | CompanyFeeContext
+  | LlpFeeContext
+  | ConversionFeeContext
+  | ClosureFeeContext
+  | LabourFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -413,6 +432,18 @@ export function computeFees(
 /** Validate + normalise an untrusted `{ kind, ... }` blob into a FeeContext. */
 export function parseFeeContext(raw: any): FeeContext | null {
   if (!raw || typeof raw !== "object") return null;
+  if (raw.kind === "labour") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (!/^labour-licence(-[a-z0-9-]+)?$/.test(slug)) return null;
+    // A count not entered yet counts as nil — the "no employees" slab.
+    const employees = Math.floor(Number(raw.employees));
+    return {
+      kind: "labour",
+      slug,
+      state: typeof raw.state === "string" ? raw.state.trim() : "",
+      employees: Number.isFinite(employees) && employees > 0 ? employees : 0,
+    };
+  }
   if (raw.kind === "closure") {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
     if (!/^closure-[a-z0-9-]+$/.test(slug)) return null;
