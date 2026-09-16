@@ -16,7 +16,13 @@ import { labourStatutoryFees } from "../config/labourFees.js";
 
 /** The catalog slugs to try, in priority order, for a fee context's professional fee. */
 export function slugsForContext(ctx: FeeContext): string[] {
-  if (ctx.kind === "conversion" || ctx.kind === "closure" || ctx.kind === "labour") return [ctx.slug];
+  if (
+    ctx.kind === "conversion" ||
+    ctx.kind === "closure" ||
+    ctx.kind === "labour" ||
+    ctx.kind === "professional-tax"
+  )
+    return [ctx.slug];
   if (ctx.kind === "llp") {
     // Indian vs Foreign LLP carry different professional fees, priced on their own
     // rows; fall back to the base `llp` row if a per-type row isn't set up yet.
@@ -140,6 +146,11 @@ export async function resolveRequestFees(
     return resolveCatalogPricedFees(ctx.slug, { lines: closureStatutoryFees(ctx), stateKnown: true });
   }
   if (ctx.kind === "labour") return resolveCatalogPricedFees(ctx.slug, labourStatutoryFees(ctx));
+  // Professional Tax carries no computed government fee — the state row's own
+  // fee lines are the whole price (see config/professionalTaxCatalog).
+  if (ctx.kind === "professional-tax") {
+    return resolveCatalogPricedFees(ctx.slug, { lines: [], stateKnown: true });
+  }
   const { fee, customLines, fromCatalog } = await professionalFeeForSlugs(slugsForContext(ctx));
   return { ...computeFees(ctx, fee, customLines), fromCatalog };
 }

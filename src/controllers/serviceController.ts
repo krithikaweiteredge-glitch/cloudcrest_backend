@@ -26,7 +26,10 @@ export async function getServiceDocuments(req: Request, res: Response) {
         mandatory: documentTypes.mandatory,
       })
       .from(documentTypes)
-      .where(eq(documentTypes.serviceId, serviceId));
+      // Insertion order, so the checklist reads in the order it was authored
+      // rather than whatever order the rows happen to come back in.
+      .where(eq(documentTypes.serviceId, serviceId))
+      .orderBy(documentTypes.id);
 
     return res.status(200).json(checklist);
   } catch (error: any) {
@@ -213,7 +216,9 @@ export async function getServiceBySlug(req: AuthenticatedRequest, res: Response)
     const documents = await db
       .select()
       .from(documentTypes)
-      .where(eq(documentTypes.serviceId, service.id));
+      // Insertion order — see the note in getServiceChecklist above.
+      .where(eq(documentTypes.serviceId, service.id))
+      .orderBy(documentTypes.id);
     const [form] = await db.select().from(serviceForms).where(eq(serviceForms.serviceId, service.id)).limit(1);
     const fields = form
       ? await db.select().from(serviceFields).where(eq(serviceFields.formId, form.id)).orderBy(serviceFields.sortOrder)

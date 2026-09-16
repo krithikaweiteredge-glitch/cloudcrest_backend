@@ -360,12 +360,26 @@ export type LabourFeeContext = {
   employees: number;
 };
 
+/**
+ * A Professional Tax registration in one state — the
+ * `professional-tax-<state>` catalog row. The client's document names no
+ * government fee, so there is nothing to compute: the row's own fee lines are
+ * the whole price.
+ */
+export type ProfessionalTaxFeeContext = {
+  kind: "professional-tax";
+  slug: string;
+  /** Telangana / Andhra Pradesh / Karnataka. */
+  state: string;
+};
+
 export type FeeContext =
   | CompanyFeeContext
   | LlpFeeContext
   | ConversionFeeContext
   | ClosureFeeContext
-  | LabourFeeContext;
+  | LabourFeeContext
+  | ProfessionalTaxFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -432,6 +446,15 @@ export function computeFees(
 /** Validate + normalise an untrusted `{ kind, ... }` blob into a FeeContext. */
 export function parseFeeContext(raw: any): FeeContext | null {
   if (!raw || typeof raw !== "object") return null;
+  if (raw.kind === "professional-tax") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (!/^professional-tax(-[a-z0-9-]+)?$/.test(slug)) return null;
+    return {
+      kind: "professional-tax",
+      slug,
+      state: typeof raw.state === "string" ? raw.state.trim() : "",
+    };
+  }
   if (raw.kind === "labour") {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
     if (!/^labour-licence(-[a-z0-9-]+)?$/.test(slug)) return null;

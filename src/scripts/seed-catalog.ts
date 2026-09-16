@@ -660,8 +660,11 @@ const CATALOG: SeedGroup[] = [
         "Bank details",
         "Cancelled cheque",
       ]),
-      // New addition.
+      // New addition. Levied by the state, so it is registered state-wise like
+      // the Labour Licence above: one inactive row per state, authored by the
+      // admin (content: db:backfill:professional-tax).
       min("professional-tax", "Professional Tax Registration", "Professional Tax", "State Commercial Tax Dept.", "Coins"),
+      ...stateCombos("professional-tax", "Professional Tax", "State Commercial Tax Dept.", "Coins"),
     ],
   },
   {
