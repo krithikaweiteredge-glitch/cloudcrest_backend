@@ -680,6 +680,9 @@ const CATALOG: SeedGroup[] = [
         "Layout plan of premises",
         "Photographs of the premises",
       ]),
+      // Registered state-wise like the Labour Licence: one inactive row per
+      // state, authored by the admin (content: db:backfill:trade-licence).
+      ...stateCombos("trade-licence", "Trade Licence", "Municipal Corp.", "FileBadge2"),
     ],
   },
   {
