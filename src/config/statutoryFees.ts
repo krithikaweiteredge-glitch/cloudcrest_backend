@@ -373,13 +373,40 @@ export type ProfessionalTaxFeeContext = {
   state: string;
 };
 
+/**
+ * A Trade Licence in one state — the `trade-licence-<state>` catalog row. The
+ * Govt Fee is the premises area times the row's per-sq.ft. rate for the road
+ * width; see config/tradeLicenceFees.
+ */
+export type TradeLicenceFeeContext = {
+  kind: "trade-licence";
+  slug: string;
+  state: string;
+  /** single / double / multiple / star — "" until picked. */
+  roadWidth: string;
+  /** Premises area in sq.ft. */
+  area: number;
+};
+
+/**
+ * An EPF or ESI registration — the `epf` / `esi` catalog row. The client's
+ * document names no government fee, so the row's own fee lines are the whole
+ * price.
+ */
+export type EmployerRegistrationFeeContext = {
+  kind: "employer-registration";
+  slug: string;
+};
+
 export type FeeContext =
   | CompanyFeeContext
   | LlpFeeContext
   | ConversionFeeContext
   | ClosureFeeContext
   | LabourFeeContext
-  | ProfessionalTaxFeeContext;
+  | ProfessionalTaxFeeContext
+  | TradeLicenceFeeContext
+  | EmployerRegistrationFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -446,6 +473,24 @@ export function computeFees(
 /** Validate + normalise an untrusted `{ kind, ... }` blob into a FeeContext. */
 export function parseFeeContext(raw: any): FeeContext | null {
   if (!raw || typeof raw !== "object") return null;
+  if (raw.kind === "employer-registration") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (slug !== "epf" && slug !== "esi") return null;
+    return { kind: "employer-registration", slug };
+  }
+  if (raw.kind === "trade-licence") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (!/^trade-licence(-[a-z0-9-]+)?$/.test(slug)) return null;
+    // An area not entered yet counts as nil — no Govt Fee line yet.
+    const area = Number(raw.area);
+    return {
+      kind: "trade-licence",
+      slug,
+      state: typeof raw.state === "string" ? raw.state.trim() : "",
+      roadWidth: typeof raw.roadWidth === "string" ? raw.roadWidth.trim() : "",
+      area: Number.isFinite(area) && area > 0 ? area : 0,
+    };
+  }
   if (raw.kind === "professional-tax") {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
     if (!/^professional-tax(-[a-z0-9-]+)?$/.test(slug)) return null;

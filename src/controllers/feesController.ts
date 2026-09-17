@@ -13,6 +13,8 @@ import {
 import { conversionStatutoryFees } from "../config/conversionFees.js";
 import { closureStatutoryFees } from "../config/closureFees.js";
 import { labourStatutoryFees } from "../config/labourFees.js";
+import { tradeLicenceStatutoryFees } from "../config/tradeLicenceFees.js";
+import { parseRoadWidthRates } from "../config/tradeLicenceCatalog.js";
 
 /** The catalog slugs to try, in priority order, for a fee context's professional fee. */
 export function slugsForContext(ctx: FeeContext): string[] {
@@ -20,7 +22,9 @@ export function slugsForContext(ctx: FeeContext): string[] {
     ctx.kind === "conversion" ||
     ctx.kind === "closure" ||
     ctx.kind === "labour" ||
-    ctx.kind === "professional-tax"
+    ctx.kind === "professional-tax" ||
+    ctx.kind === "trade-licence" ||
+    ctx.kind === "employer-registration"
   )
     return [ctx.slug];
   if (ctx.kind === "llp") {
@@ -146,9 +150,18 @@ export async function resolveRequestFees(
     return resolveCatalogPricedFees(ctx.slug, { lines: closureStatutoryFees(ctx), stateKnown: true });
   }
   if (ctx.kind === "labour") return resolveCatalogPricedFees(ctx.slug, labourStatutoryFees(ctx));
+  if (ctx.kind === "trade-licence") {
+    // The per-sq.ft. rates are admin content on the state row's wizard rules.
+    const [row] = await db
+      .select({ wizardRules: services.wizardRules })
+      .from(services)
+      .where(eq(services.slug, ctx.slug))
+      .limit(1);
+    return resolveCatalogPricedFees(ctx.slug, tradeLicenceStatutoryFees(ctx, parseRoadWidthRates(row?.wizardRules)));
+  }
   // Professional Tax carries no computed government fee — the state row's own
   // fee lines are the whole price (see config/professionalTaxCatalog).
-  if (ctx.kind === "professional-tax") {
+  if (ctx.kind === "professional-tax" || ctx.kind === "employer-registration") {
     return resolveCatalogPricedFees(ctx.slug, { lines: [], stateKnown: true });
   }
   const { fee, customLines, fromCatalog } = await professionalFeeForSlugs(slugsForContext(ctx));
