@@ -34,10 +34,15 @@
  *
  * DRY RUN BY DEFAULT. `backend/.env` points at the live database:
  *
- *   npm run db:backfill:gst                                  # preview
- *   npm run db:backfill:gst -- --apply                       # write
- *   npm run db:backfill:gst -- --apply --delete-retired      # write + remove retired rows
- *   npm run db:backfill:gst -- --apply --overwrite-prices    # write + reprice already-priced rows
+ *   npm run db:backfill:gst                                        # preview
+ *   npx tsx src/scripts/backfill-gst.ts --apply                    # write
+ *   npx tsx src/scripts/backfill-gst.ts --apply --delete-retired   # write + remove retired rows
+ *   npx tsx src/scripts/backfill-gst.ts --apply --overwrite-prices # write + reprice already-priced rows
+ *
+ * Invoke the flagged runs through `npx tsx` as above, NOT through
+ * `npm run db:backfill:gst -- --apply`: npm consumes the flags as its own
+ * config ("Unknown cli config" warning) instead of forwarding them, so the
+ * script silently stays in dry run and appears to do nothing.
  */
 import { db, pool } from "../config/db.js";
 import {
