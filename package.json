@@ -19,6 +19,7 @@
     "db:backfill:professional-tax": "tsx src/scripts/backfill-professional-tax.ts",
     "db:backfill:trade-licence": "tsx src/scripts/backfill-trade-licence.ts",
     "db:backfill:gst": "tsx src/scripts/backfill-gst.ts",
+    "db:backfill:lut": "tsx src/scripts/backfill-lut.ts",
     "db:backfill:employer-registration": "tsx src/scripts/backfill-employer-registration.ts",
     "db:fix-notifications": "tsx src/scripts/align-notifications.ts",
     "db:add-doc-labels": "tsx src/scripts/add-document-labels.ts",

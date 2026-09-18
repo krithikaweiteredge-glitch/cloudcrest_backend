@@ -495,7 +495,20 @@ export async function generateSummaryPdf(req: AuthenticatedRequest, res: Respons
       fees,
       authority,
       documents,
+      // Optional: a wizard can send the answers it collected as label/value
+      // pairs to be printed as their own section. Only what the wizard passes
+      // is printed, so a wizard that needs to withhold or mask a value (e.g. a
+      // portal password) masks it before calling — the PDF never reads
+      // `formData` itself.
+      details,
     } = req.body;
+
+    const detailRows: { label: string; value: string }[] = Array.isArray(details)
+      ? details
+          .filter((d: any) => d && typeof d.label === "string" && d.label.trim())
+          .map((d: any) => ({ label: String(d.label).trim(), value: String(d.value ?? "").trim() }))
+          .filter((d: { value: string }) => d.value !== "")
+      : [];
 
     const customFees: { label: string; amount: number }[] = Array.isArray(fees)
       ? fees
@@ -572,6 +585,26 @@ export async function generateSummaryPdf(req: AuthenticatedRequest, res: Respons
         y = dy + 10;
       } else {
         y += 10;
+      }
+
+      if (detailRows.length > 0) {
+        doc.strokeColor("#E2E8F0").lineWidth(1).moveTo(50, y).lineTo(550, y).stroke();
+        y += 15;
+        doc.fontSize(12).fillColor("#1F4E78").text("Details Provided", 50, y);
+        y += 22;
+        doc.fontSize(10);
+        for (const row of detailRows) {
+          doc.fillColor("#718096").text(row.label, 50, y, { width: 140 });
+          doc.fillColor("#2D3748").text(row.value, 200, y, { width: 350 });
+          y += Math.max(
+            18,
+            Math.max(
+              doc.heightOfString(row.label, { width: 140 }),
+              doc.heightOfString(row.value, { width: 350 }),
+            ) + 6,
+          );
+        }
+        y += 6;
       }
     } else {
       // Main objects needs wrapping

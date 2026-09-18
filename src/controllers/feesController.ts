@@ -25,7 +25,8 @@ export function slugsForContext(ctx: FeeContext): string[] {
     ctx.kind === "professional-tax" ||
     ctx.kind === "trade-licence" ||
     ctx.kind === "employer-registration" ||
-    ctx.kind === "gst"
+    ctx.kind === "gst" ||
+    ctx.kind === "lut"
   )
     return [ctx.slug];
   if (ctx.kind === "llp") {
@@ -171,7 +172,11 @@ export async function resolveRequestFees(
   }
   // Professional Tax carries no computed government fee — the state row's own
   // fee lines are the whole price (see config/professionalTaxCatalog).
-  if (ctx.kind === "professional-tax" || ctx.kind === "employer-registration") {
+  if (
+    ctx.kind === "professional-tax" ||
+    ctx.kind === "employer-registration" ||
+    ctx.kind === "lut"
+  ) {
     return resolveCatalogPricedFees(ctx.slug, { lines: [], stateKnown: true });
   }
   const { fee, customLines, fromCatalog } = await professionalFeeForSlugs(slugsForContext(ctx));
