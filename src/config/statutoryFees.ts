@@ -413,6 +413,18 @@ export type GstFeeContext = {
   constitution: string;
 };
 
+/**
+ * A Letter of Undertaking — the `lut` catalog row. The client's document names
+ * no fee, so there is nothing to compute: the row's own fee lines, which the
+ * admin owns, are the whole price.
+ */
+export type LutFeeContext = {
+  kind: "lut";
+  slug: string;
+  /** Financial year the LUT is filed for — recorded, not priced on. */
+  financialYear: string;
+};
+
 export type FeeContext =
   | CompanyFeeContext
   | LlpFeeContext
@@ -422,7 +434,8 @@ export type FeeContext =
   | ProfessionalTaxFeeContext
   | TradeLicenceFeeContext
   | EmployerRegistrationFeeContext
-  | GstFeeContext;
+  | GstFeeContext
+  | LutFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -493,6 +506,15 @@ export function parseFeeContext(raw: any): FeeContext | null {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
     if (slug !== "epf" && slug !== "esi") return null;
     return { kind: "employer-registration", slug };
+  }
+  if (raw.kind === "lut") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (slug !== "lut") return null;
+    return {
+      kind: "lut",
+      slug,
+      financialYear: typeof raw.financialYear === "string" ? raw.financialYear.trim() : "",
+    };
   }
   if (raw.kind === "gst") {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
