@@ -26,7 +26,8 @@ export function slugsForContext(ctx: FeeContext): string[] {
     ctx.kind === "trade-licence" ||
     ctx.kind === "employer-registration" ||
     ctx.kind === "gst" ||
-    ctx.kind === "lut"
+    ctx.kind === "lut" ||
+    ctx.kind === "pan-tan"
   )
     return [ctx.slug];
   if (ctx.kind === "llp") {
@@ -160,6 +161,13 @@ export async function resolveRequestFees(
       .where(eq(services.slug, ctx.slug))
       .limit(1);
     return resolveCatalogPricedFees(ctx.slug, tradeLicenceStatutoryFees(ctx, parseRoadWidthRates(row?.wizardRules)));
+  }
+  // PAN / TAN price off their own row, falling back to the shared `pan-tan`
+  // launcher when a service row isn't priced yet.
+  if (ctx.kind === "pan-tan") {
+    const typed = await resolveCatalogPricedFees(ctx.slug, { lines: [], stateKnown: true });
+    if (typed.fromCatalog || ctx.slug === "pan-tan") return typed;
+    return resolveCatalogPricedFees("pan-tan", { lines: [], stateKnown: true });
   }
   // GST carries no computed government fee either — the type row's own fee
   // lines are the whole price (see config/gstCatalog). A type row the admin

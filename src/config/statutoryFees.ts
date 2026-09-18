@@ -425,6 +425,20 @@ export type LutFeeContext = {
   financialYear: string;
 };
 
+/**
+ * A PAN or TAN application — the `pan-tan-pan` / `pan-tan-tan` catalog row. The
+ * client prices both at a flat Professional Fee plus GST and names no
+ * government fee, so the row's own fee lines are the whole price.
+ */
+export type PanTanFeeContext = {
+  kind: "pan-tan";
+  slug: string;
+  /** "pan" or "tan" — recorded, not priced on. */
+  service: string;
+  /** Applicant category / deductor category — recorded, not priced on. */
+  category: string;
+};
+
 export type FeeContext =
   | CompanyFeeContext
   | LlpFeeContext
@@ -435,7 +449,8 @@ export type FeeContext =
   | TradeLicenceFeeContext
   | EmployerRegistrationFeeContext
   | GstFeeContext
-  | LutFeeContext;
+  | LutFeeContext
+  | PanTanFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -506,6 +521,16 @@ export function parseFeeContext(raw: any): FeeContext | null {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
     if (slug !== "epf" && slug !== "esi") return null;
     return { kind: "employer-registration", slug };
+  }
+  if (raw.kind === "pan-tan") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (!/^pan-tan(-[a-z0-9-]+)?$/.test(slug)) return null;
+    return {
+      kind: "pan-tan",
+      slug,
+      service: typeof raw.service === "string" ? raw.service.trim() : "",
+      category: typeof raw.category === "string" ? raw.category.trim() : "",
+    };
   }
   if (raw.kind === "lut") {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
