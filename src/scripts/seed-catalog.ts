@@ -30,6 +30,7 @@ import { eq } from "drizzle-orm";
 import { COMPANY_WIZARD_DEFAULTS } from "../config/companyWizardDefaults.js";
 import { EXACT_NAMES } from "../config/exactNames.js";
 import { REGISTRATION_CATALOG } from "../config/registrationCatalog.js";
+import { GST_TYPES, GST_GENERAL_DOCUMENTS } from "../config/gstCatalog.js";
 
 type SeedService = {
   slug: string;
@@ -482,127 +483,18 @@ const CATALOG: SeedGroup[] = [
     category: "Tax Registration",
     subcategory: "Tax Registrations",
     services: [
-      svc("gst", "GST Registration", "GST", "GSTN", "REG-01", "Wallet", [
-        "PAN of business",
-        "Aadhaar of proprietor / partners",
-        "Business address proof",
-        "Rent agreement + NOC",
-        "Bank statement or cancelled cheque",
-        "Board resolution (companies)",
-        "Digital Signature (DSC)",
-      ]),
-      {
-        ...svc("gst-regular", "Normal / Regular Taxpayer", "Regular", "GSTN", "REG-01", "Wallet", [
-          "PAN of business",
-          "Aadhaar of proprietor / partners / directors",
-          "Passport-size photograph of authorised signatory",
-          "Proof of principal place of business",
-          "Bank account proof",
-          "Authorisation letter / board resolution",
-          "Proof of business constitution",
-        ]),
+      svc("gst", "GST Registration", "GST", "GSTN", "REG-01", "Wallet", GST_GENERAL_DOCUMENTS),
+      // The nine taxpayer types the client's GST document lists, seeded inactive
+      // so they nest under `gst` in Admin → Services and stay out of the customer
+      // sidebar. Content and the ₹2,499 + ₹450 price live in config/gstCatalog and
+      // are (re)applied by `npm run db:backfill:gst`.
+      ...GST_TYPES.map((t) => ({
+        ...svc(t.slug, t.title, t.short, "GSTN", t.form, t.icon, GST_GENERAL_DOCUMENTS),
         active: false,
-        description: "Standard GST registration for businesses crossing the turnover threshold (₹40L goods / ₹20L services). Allows collecting tax and claiming Input Tax Credit.",
-        whoCanApply: "• Turnover crossing ₹40 lakh (goods) or ₹20 lakh (services).\n• Anyone making regular inter-state or intra-state taxable supplies.",
-        wizardRules: JSON.stringify({ tags: ["Most common", "Full ITC"], popular: true }),
-      },
-      {
-        ...svc("gst-composition", "Composition Scheme", "Composition", "GSTN", "REG-01 · CMP-02", "Wallet", [
-          "PAN of business",
-          "Aadhaar of proprietor / partners",
-          "Proof of principal place of business",
-          "Bank account proof",
-          "Form CMP-02 opt-in declaration",
-        ]),
-        active: false,
-        description: "A flat-rate scheme for small taxpayers (turnover ≤ ₹1.5 crore) with simplified quarterly compliance.",
-        whoCanApply: "• Turnover up to ₹1.5 crore (₹75 lakh for special states).\n• Pay tax at flat rate (cannot collect GST or claim ITC).",
-        wizardRules: JSON.stringify({ tags: ["Flat rate", "Turnover ≤ ₹1.5 Cr"] }),
-      },
-      {
-        ...svc("gst-voluntary", "Voluntary Registration", "Voluntary", "GSTN", "REG-01", "Wallet", [
-          "PAN of business",
-          "Aadhaar of proprietor / partners / directors",
-          "Proof of principal place of business",
-          "Bank account proof",
-          "Proof of business constitution",
-        ]),
-        active: false,
-        description: "Opt-in registration for businesses below the turnover threshold to claim ITC and sell B2B or inter-state.",
-        whoCanApply: "• Businesses below threshold wanting Input Tax Credit.\n• Suppliers needing a GSTIN for B2B sales or e-commerce.",
-        wizardRules: JSON.stringify({ tags: ["Optional", "Claim ITC"] }),
-      },
-      {
-        ...svc("gst-casual", "Casual Taxable Person (CTP)", "CTP", "GSTN", "REG-01", "Wallet", [
-          "PAN of business",
-          "Aadhaar of signatory",
-          "Proof of temporary place of business",
-          "Estimated turnover & tax liability details",
-          "Advance tax deposit challan",
-        ]),
-        active: false,
-        description: "For occasional supplies in a state where you have no fixed place of business (e.g. trade fair, exhibition).",
-        whoCanApply: "• Occasional suppliers at exhibitions or seasonal stalls.\n• Advance tax deposit required for registration period (up to 90 days).",
-        wizardRules: JSON.stringify({ tags: ["Occasional", "Advance tax"] }),
-      },
-      {
-        ...svc("gst-nrtp", "Non-Resident Taxable Person (NRTP)", "NRTP", "GSTN", "REG-09", "Globe", [
-          "Non-resident passport / tax ID",
-          "Authorised signatory PAN (Indian resident)",
-          "Advance tax deposit challan",
-          "Proof of business outside India",
-        ]),
-        active: false,
-        description: "For foreign residents occasionally supplying goods or services in India without a fixed office.",
-        whoCanApply: "• Foreign residents supplying goods or services in India.\n• Apply on Form REG-09 with advance tax deposit.",
-        wizardRules: JSON.stringify({ tags: ["Foreign", "Advance tax"] }),
-      },
-      {
-        ...svc("gst-isd", "Input Service Distributor (ISD)", "ISD", "GSTN", "REG-01", "Share2", [
-          "PAN of company / HO",
-          "Existing GSTIN of head office",
-          "List of branch GSTINs to receive credit",
-          "Authorisation letter",
-        ]),
-        active: false,
-        description: "For head offices distributing input tax credit for common input services to branch units.",
-        whoCanApply: "• Multi-unit businesses distributing common input service tax credits.",
-        wizardRules: JSON.stringify({ tags: ["Credit distribution"] }),
-      },
-      {
-        ...svc("gst-ecom", "E-Commerce Operator", "E-Commerce", "GSTN", "REG-01", "ShoppingCart", [
-          "PAN of business",
-          "Proof of digital platform ownership / agreement",
-          "Aadhaar of directors / partners",
-          "Bank account proof",
-        ]),
-        active: false,
-        description: "Mandatory GST registration for e-commerce platform operators facilitating third-party supplies.",
-        whoCanApply: "• Platform operators facilitating supplies between sellers and buyers.\n• Required to collect TCS under GST.",
-        wizardRules: JSON.stringify({ tags: ["TCS", "Mandatory"] }),
-      },
-      {
-        ...svc("gst-tds_tcs", "TDS / TCS Deductor", "TDS / TCS", "GSTN", "REG-07", "FileText", [
-          "TAN of government department / deductor",
-          "PAN of authorised officer",
-          "Office address proof",
-        ]),
-        active: false,
-        description: "For notified government bodies, local authorities, or specified deductors deducting TDS under GST.",
-        whoCanApply: "• Government departments & notified deductors deducting GST TDS on Form REG-07.",
-        wizardRules: JSON.stringify({ tags: ["Deduct / Collect", "TAN"] }),
-      },
-      {
-        ...svc("gst-other", "Special / Other GST Registration", "Special / SEZ", "GSTN", "REG-01", "Shield", [
-          "PAN of entity",
-          "SEZ approval letter / developer certificate",
-          "Address proof",
-        ]),
-        active: false,
-        description: "For SEZ units, developers, OIDAR service providers, and UN/embassy Unique Identity Number (UIN) applicants.",
-        whoCanApply: "• SEZ developers, SEZ units, OIDAR providers, and foreign embassy UIN applicants.",
-        wizardRules: JSON.stringify({ tags: ["SEZ / Special"] }),
-      },
+        description: t.description,
+        whoCanApply: t.whoCanApply,
+        wizardRules: JSON.stringify({ tags: t.tags, popular: !!t.popular }),
+      })),
       svc("pan-tan", "PAN & TAN", "PAN / TAN", "Income Tax / NSDL", "49A / 49B", "IdCard", [
         "Identity proof (Aadhaar / Passport)",
         "Address proof",

@@ -398,6 +398,21 @@ export type EmployerRegistrationFeeContext = {
   slug: string;
 };
 
+/**
+ * A GST registration of one taxpayer type — the `gst-<type>` catalog row. The
+ * client's document names no government fee (it prices every registration at a
+ * Professional Fee plus GST), so there is nothing to compute: the row's own fee
+ * lines, which the admin owns, are the whole price.
+ */
+export type GstFeeContext = {
+  kind: "gst";
+  slug: string;
+  /** State / UT of registration — recorded on the request, not priced on. */
+  state: string;
+  /** Constitution of business — recorded on the request, not priced on. */
+  constitution: string;
+};
+
 export type FeeContext =
   | CompanyFeeContext
   | LlpFeeContext
@@ -406,7 +421,8 @@ export type FeeContext =
   | LabourFeeContext
   | ProfessionalTaxFeeContext
   | TradeLicenceFeeContext
-  | EmployerRegistrationFeeContext;
+  | EmployerRegistrationFeeContext
+  | GstFeeContext;
 
 export type ComputedFees = CombinedFees & {
   stateKnown: boolean;
@@ -477,6 +493,18 @@ export function parseFeeContext(raw: any): FeeContext | null {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
     if (slug !== "epf" && slug !== "esi") return null;
     return { kind: "employer-registration", slug };
+  }
+  if (raw.kind === "gst") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
+    if (!/^gst(-[a-z0-9-]+)?$/.test(slug)) return null;
+    // State and constitution are carried for the record; neither is priced on,
+    // so a context sent before they are picked is still valid.
+    return {
+      kind: "gst",
+      slug,
+      state: typeof raw.state === "string" ? raw.state.trim() : "",
+      constitution: typeof raw.constitution === "string" ? raw.constitution.trim() : "",
+    };
   }
   if (raw.kind === "trade-licence") {
     const slug = typeof raw.slug === "string" ? raw.slug.trim() : "";
