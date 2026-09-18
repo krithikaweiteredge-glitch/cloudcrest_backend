@@ -24,7 +24,8 @@ export function slugsForContext(ctx: FeeContext): string[] {
     ctx.kind === "labour" ||
     ctx.kind === "professional-tax" ||
     ctx.kind === "trade-licence" ||
-    ctx.kind === "employer-registration"
+    ctx.kind === "employer-registration" ||
+    ctx.kind === "gst"
   )
     return [ctx.slug];
   if (ctx.kind === "llp") {
@@ -158,6 +159,15 @@ export async function resolveRequestFees(
       .where(eq(services.slug, ctx.slug))
       .limit(1);
     return resolveCatalogPricedFees(ctx.slug, tradeLicenceStatutoryFees(ctx, parseRoadWidthRates(row?.wizardRules)));
+  }
+  // GST carries no computed government fee either — the type row's own fee
+  // lines are the whole price (see config/gstCatalog). A type row the admin
+  // hasn't priced yet falls back to the base `gst` row, so the wizard quotes
+  // the published GST price rather than ₹0.
+  if (ctx.kind === "gst") {
+    const typed = await resolveCatalogPricedFees(ctx.slug, { lines: [], stateKnown: true });
+    if (typed.fromCatalog || ctx.slug === "gst") return typed;
+    return resolveCatalogPricedFees("gst", { lines: [], stateKnown: true });
   }
   // Professional Tax carries no computed government fee — the state row's own
   // fee lines are the whole price (see config/professionalTaxCatalog).
