@@ -2,6 +2,9 @@
  * Sets up the GST taxpayer-type rows from `config/gstCatalog.ts` (the client's
  * "GST_Registration_changes.docx"):
  *
+ *   - prices the base `gst` launcher row, which Admin → Services shows as the
+ *     GST service's price and which the fee engine falls back to for an
+ *     unpriced type row. Its name, form and documents are left alone;
  *   - creates the nine `gst-<type>` rows when missing — inactive, in `gst`'s
  *     subcategory, so they nest under it in Admin → Services and stay out of
  *     the customer sidebar (as the Professional Tax state rows do);
@@ -55,6 +58,7 @@ import {
 } from "../models/schema.js";
 import { eq, inArray } from "drizzle-orm";
 import {
+  GST_BASE_FEE_LINES,
   GST_BASE_SLUG,
   GST_CATALOG,
   GST_RETIRED_SLUGS,
@@ -102,6 +106,42 @@ async function run() {
     console.error(`No "${GST_BASE_SLUG}" service in the catalog — run db:seed:catalog first.`);
     process.exitCode = 1;
     return;
+  }
+
+  // The launcher row itself. Only its price is written — Admin → Services shows
+  // it as the GST service's price, and the fee engine falls back to it for a
+  // type row that isn't priced yet, so an unpriced or stray figure here
+  // misquotes the service.
+  console.log("\nBase row\n");
+  {
+    let baseLines: GstFeeLine[] = [];
+    try {
+      const parsed = base.feeLines ? JSON.parse(base.feeLines) : [];
+      if (Array.isArray(parsed)) baseLines = parsed;
+    } catch {
+      /* shown as (none) */
+    }
+    const authored = baseLines.length > 0;
+    const same = describe(baseLines) === describe(GST_BASE_FEE_LINES);
+    const write = !authored || same || overwritePrices;
+    console.log(`  ${apply && write ? "updated  " : "would set"} ${GST_BASE_SLUG}`);
+    console.log(
+      write
+        ? `      fee lines: ${describe(baseLines)}  →  ${describe(GST_BASE_FEE_LINES)}` +
+            (authored && !same ? "   ⚠ OVERWRITES the admin's price" : "")
+        : `      fee lines KEPT at the admin's ${describe(baseLines)} (document says ${describe(GST_BASE_FEE_LINES)}) — pass --overwrite-prices to reprice`,
+    );
+    if (apply && write) {
+      await db
+        .update(services)
+        .set({
+          feeLines: JSON.stringify(GST_BASE_FEE_LINES),
+          professionalFee: (
+            GST_BASE_FEE_LINES.find((l) => /professional/i.test(l.label))?.amount ?? 0
+          ).toFixed(2),
+        })
+        .where(eq(services.id, base.id));
+    }
   }
 
   console.log("\nTaxpayer-type rows\n");

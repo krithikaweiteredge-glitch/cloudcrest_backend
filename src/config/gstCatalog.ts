@@ -411,6 +411,15 @@ export const GST_FEE_LINES: GstFeeLine[] = [
 ];
 
 /**
+ * The base `gst` launcher row carries the same price. It has no taxpayer type
+ * of its own, but it is what Admin → Services shows as the GST service's price
+ * and what the fee engine falls back to for a type row that isn't priced yet,
+ * so leaving it unpriced (or at a stray figure) misquotes the service. Only its
+ * price is written — its name, form and documents belong to the admin.
+ */
+export const GST_BASE_FEE_LINES: GstFeeLine[] = GST_FEE_LINES;
+
+/**
  * The general "Documents required" list shown on every GST service page. The
  * page can't know the applicant's constitution yet — that is asked on page 2 —
  * so it shows the common set and the wizard narrows it on page 3.
