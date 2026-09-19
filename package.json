@@ -20,6 +20,7 @@
     "db:backfill:trade-licence": "tsx src/scripts/backfill-trade-licence.ts",
     "db:backfill:gst": "tsx src/scripts/backfill-gst.ts",
     "db:backfill:lut": "tsx src/scripts/backfill-lut.ts",
+    "db:backfill:lower-tax-deduction": "tsx src/scripts/backfill-lower-tax-deduction.ts",
     "db:backfill:pan-tan": "tsx src/scripts/backfill-pan-tan.ts",
     "db:backfill:employer-registration": "tsx src/scripts/backfill-employer-registration.ts",
     "db:fix-notifications": "tsx src/scripts/align-notifications.ts",
