@@ -50,7 +50,10 @@ export const EXACT_NAMES: Record<string, string> = {
   "pan-tan": "TAN/PAN",
   dpiit: "DPIIT",
   "lower-tax-deduction": "Lower Tax Deduction",
-  "80iac": "80IAC",
+  // `section-140` (the former `80iac`) is deliberately absent: EXACT_NAMES writes
+  // one string to BOTH name and short_title, and this service needs different
+  // ones ("IMB Certificate (Section 140)" / "Section 140"), so the seed
+  // definition carries them instead. See config/section140Catalog.ts.
   "12a": "12A",
   "80g": "80G",
   icegate: "ICE GATE",
