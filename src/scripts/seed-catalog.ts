@@ -513,7 +513,10 @@ const CATALOG: SeedGroup[] = [
       // New additions — in document order.
       min("lut", "LUT (Letter of Undertaking)", "LUT", "GSTN", "Wallet"),
       min("lower-tax-deduction", "Lower Tax Deduction Certificate", "Lower TDS", "Income Tax", "Wallet"),
-      min("80iac", "80IAC Tax Exemption (Startups)", "80IAC", "CBDT / DPIIT", "Rocket"),
+      // Section 140 of the Income-tax Act, 2025 replaced Section 80-IAC of the
+      // 1961 Act, so the row is named for it (content: db:backfill:section-140,
+      // which also renames an existing `80iac` row to this slug).
+      min("section-140", "IMB Certificate (Section 140)", "Section 140", "CBDT / DPIIT", "Rocket"),
       min("12a", "12A Registration", "12A", "Income Tax", "HeartPulse"),
       min("80g", "80G Registration", "80G", "Income Tax", "HeartPulse"),
       min("icegate", "ICEGATE Registration", "ICEGATE", "CBIC", "Globe"),
