@@ -54,7 +54,9 @@ export const EXACT_NAMES: Record<string, string> = {
   // one string to BOTH name and short_title, and this service needs different
   // ones ("IMB Certificate (Section 140)" / "Section 140"), so the seed
   // definition carries them instead. See config/section140Catalog.ts.
-  "12a": "12A",
+  // `section-332` (the former `12a`) is absent for the same reason as
+  // `section-140` above: its name and short title differ ("Section 332
+  // Registration" / "Section 332"). See config/section332Catalog.ts.
   "80g": "80G",
   icegate: "ICE GATE",
   "form-10a": "Form 104 ( old form 10A)",
