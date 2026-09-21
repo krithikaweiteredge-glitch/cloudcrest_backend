@@ -517,7 +517,10 @@ const CATALOG: SeedGroup[] = [
       // 1961 Act, so the row is named for it (content: db:backfill:section-140,
       // which also renames an existing `80iac` row to this slug).
       min("section-140", "IMB Certificate (Section 140)", "Section 140", "CBDT / DPIIT", "Rocket"),
-      min("12a", "12A Registration", "12A", "Income Tax", "HeartPulse"),
+      // Section 332 of the Income-tax Act, 2025 replaced Sections 12A / 12AA /
+      // 12AB of the 1961 Act (content: db:backfill:section-332, which also
+      // renames an existing `12a` row to this slug).
+      min("section-332", "Section 332 Registration", "Section 332", "Income Tax", "HeartPulse"),
       min("80g", "80G Registration", "80G", "Income Tax", "HeartPulse"),
       min("icegate", "ICEGATE Registration", "ICEGATE", "CBIC", "Globe"),
       min("form-10a", "Form 10A Registration", "Form 10A", "Income Tax", "Wallet"),
