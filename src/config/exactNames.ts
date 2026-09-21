@@ -57,7 +57,8 @@ export const EXACT_NAMES: Record<string, string> = {
   // `section-332` (the former `12a`) is absent for the same reason as
   // `section-140` above: its name and short title differ ("Section 332
   // Registration" / "Section 332"). See config/section332Catalog.ts.
-  "80g": "80G",
+  // `section-354` (the former `80g`) is absent for the same reason:
+  // "Section 354 Approval" / "Section 354". See config/section354Catalog.ts.
   icegate: "ICE GATE",
   "form-10a": "Form 104 ( old form 10A)",
   "non-deduction-declaration": "Declaration for non-deduction of tax",

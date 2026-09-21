@@ -521,7 +521,10 @@ const CATALOG: SeedGroup[] = [
       // 12AB of the 1961 Act (content: db:backfill:section-332, which also
       // renames an existing `12a` row to this slug).
       min("section-332", "Section 332 Registration", "Section 332", "Income Tax", "HeartPulse"),
-      min("80g", "80G Registration", "80G", "Income Tax", "HeartPulse"),
+      // Approval under Section 354 of the Income-tax Act, 2025 replaced the old
+      // Section 80G approval (content: db:backfill:section-354, which also
+      // renames an existing `80g` row to this slug).
+      min("section-354", "Section 354 Approval", "Section 354", "Income Tax", "HeartPulse"),
       min("icegate", "ICEGATE Registration", "ICEGATE", "CBIC", "Globe"),
       min("form-10a", "Form 10A Registration", "Form 10A", "Income Tax", "Wallet"),
       min("non-deduction-declaration", "Declaration for Non-Deduction of Tax", "Non-Deduction", "Income Tax", "Wallet"),

@@ -23,6 +23,7 @@
     "db:backfill:lower-tax-deduction": "tsx src/scripts/backfill-lower-tax-deduction.ts",
     "db:backfill:section-140": "tsx src/scripts/backfill-section-140.ts",
     "db:backfill:section-332": "tsx src/scripts/backfill-section-332.ts",
+    "db:backfill:section-354": "tsx src/scripts/backfill-section-354.ts",
     "db:backfill:pan-tan": "tsx src/scripts/backfill-pan-tan.ts",
     "db:backfill:employer-registration": "tsx src/scripts/backfill-employer-registration.ts",
     "db:fix-notifications": "tsx src/scripts/align-notifications.ts",
