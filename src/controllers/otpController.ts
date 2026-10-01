@@ -32,8 +32,15 @@ export async function sendOtp(req: Request, res: Response) {
     // Send code via Nodemailer (or log to terminal as fallback)
     const emailSent = await sendOtpEmail(email, code);
 
+    // Telling the user a code is on its way when delivery failed leaves them
+    // waiting on an email that will never arrive, with nothing in the response
+    // to explain it. Surface the failure instead. The code itself is never
+    // logged here — it would be a standing way into any account.
     if (!emailSent) {
-      console.warn(`[SMTP Warning] Failed to deliver OTP email to ${email}. Fallback: Code is ${code}`);
+      console.error(`[SMTP] Failed to deliver OTP email to ${email}`);
+      return res.status(502).json({
+        error: "Could not send the verification email. Please try again shortly.",
+      });
     }
 
     return res.status(200).json({ message: "Verification code sent successfully" });

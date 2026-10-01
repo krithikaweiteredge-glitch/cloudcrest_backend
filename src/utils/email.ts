@@ -1,6 +1,10 @@
 import nodemailer from "nodemailer";
 import dns from "dns";
 
+// Auth codes must never reach production logs: anyone who can read the server
+// journal could otherwise sign in as any user. Printing them is a dev-only aid.
+const isProd = process.env.NODE_ENV === "production";
+
 export async function sendOtpEmail(email: string, code: string): Promise<boolean> {
   const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || "587", 10);
@@ -8,7 +12,9 @@ export async function sendOtpEmail(email: string, code: string): Promise<boolean
   const pass = process.env.SMTP_PASS;
   const from = process.env.SMTP_FROM || user || "no-reply@cloudcrest.com";
 
-  console.log(`\n======================================================\n[EMAIL OTP] Verification code for ${email}: ${code}\n======================================================\n`);
+  if (!isProd) {
+    console.log(`\n======================================================\n[EMAIL OTP] Verification code for ${email}: ${code}\n======================================================\n`);
+  }
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -29,8 +35,17 @@ export async function sendOtpEmail(email: string, code: string): Promise<boolean
     </div>
   `;
 
-  // Fallback if no SMTP credentials are provided
+  // Without credentials there is no way to deliver the code. In development that
+  // is fine — the code was printed above. In production it is a misconfiguration
+  // that silently breaks every login, so report it as a failure rather than
+  // letting the caller tell the user an email is on its way.
   if (!host || !user || !pass) {
+    if (isProd) {
+      console.error(
+        "[EMAIL OTP] SMTP is not configured (SMTP_HOST / SMTP_USER / SMTP_PASS). No verification email can be sent.",
+      );
+      return false;
+    }
     console.log(`[EMAIL OTP MOCK] SMTP configuration environment variables missing. OTP code logged to console above.`);
     return true;
   }
