@@ -135,7 +135,11 @@ function mcaEntityType(kind: string, klass: string | null): string {
 function toIsoDate(d: string | null): string | null {
   if (!d) return null;
   const s = d.trim();
-  let m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/); // DD-MM-YYYY
+  // The MCA export writes DD/MM/YYYY with slashes — every row of mca_lean.csv is
+  // that shape. Only the hyphen form was handled, so reg_date fell through
+  // unconverted, failed the client's ISO test and the incorporation date showed
+  // as "Unavailable" on every result.
+  let m = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/); // DD-MM-YYYY or DD/MM/YYYY
   if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // already ISO
   return s;
