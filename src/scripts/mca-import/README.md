@@ -46,6 +46,40 @@ python parse_struck_off.py "<path-to-Master_Struck_Off...xlsx>"   # -> struck_of
 node ../seed-struck-off.mjs struck_off_lean.csv
 ```
 
+## Monthly top-ups (additive, live-safe)
+
+The MCA portal also publishes a **monthly** incorporation report and a separate
+monthly **struck-off report**, in a different layout from the datasets above:
+
+- Incorporations: one `.xlsx` per month, sheets "Indian Companies" / "LLP
+  Companies" / "Foreign Companies" — same shape `parse_mca.py` already handles.
+- Struck-off: one `.xlsx` per month **per kind** (a companies file and an LLP
+  file are separate), single sheet, title row reading "Company/LLP Struck Off
+  Report … Date: …", header row of `S.NO | CIN|LLPIN | Company/LLP Name`. This
+  is a different layout from the Master Struck-Off workbook above, so it has
+  its own parser: `parse_struck_off_monthly.py`.
+
+These files overlap heavily with what's already loaded (the same incorporation
+can appear in more than one monthly export), and `seed-mca-companies.mjs` /
+`seed-struck-off.mjs` **drop and rebuild the whole table** — never run them
+with just a monthly file, or the rest of the index is lost. Use the additive
+loader instead, which dedupes by identifier against the live table and only
+inserts what's actually new:
+
+```bash
+# Incorporations — parse_mca.py's normal output works as-is.
+python parse_mca.py "<dir-of-monthly-xlsx>" monthly_companies.csv
+node append_monthly.mjs companies monthly_companies.csv
+
+# Struck-off — one call, multiple monthly files at once.
+python parse_struck_off_monthly.py june.xlsx july.xlsx aug.xlsx monthly_struckoff.csv
+node append_monthly.mjs struckoff monthly_struckoff.csv
+```
+
+Both print how many rows were already present vs. newly inserted, and the
+database size afterwards — check that against the 512 MB cap before running
+a large batch.
+
 ## Notes
 
 - The loader connects to the **direct** Neon endpoint (strips `-pooler`) and COPYs
