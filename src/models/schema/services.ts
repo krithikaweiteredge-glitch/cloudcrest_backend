@@ -5,6 +5,11 @@ import { type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 export const serviceCategories = pgTable("service_categories", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+  // Whole-category "not open yet" flag. Its services stay listed and browsable —
+  // the point is to advertise what is planned — but the detail page refuses to
+  // start an application and says so instead. Toggled per category in
+  // Admin -> Catalog.
+  comingSoon: boolean("coming_soon").default(false).notNull(),
 });
 
 export type ServiceCategory = InferSelectModel<typeof serviceCategories>;

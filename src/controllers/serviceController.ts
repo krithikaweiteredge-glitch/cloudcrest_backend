@@ -232,7 +232,25 @@ export async function getServiceBySlug(req: AuthenticatedRequest, res: Response)
       ? service
       : (publicService as typeof service);
 
-    return res.status(200).json({ service: visibleService, documents, form: form || null, fields });
+    // A category can be marked "coming soon" as a whole, which the detail page
+    // uses to show a notice instead of letting an application be started. The
+    // flag lives two levels up, so resolve it here rather than making the client
+    // fetch the whole catalog tree just to read one boolean.
+    const [owningCategory] = await db
+      .select({ comingSoon: serviceCategories.comingSoon, name: serviceCategories.name })
+      .from(serviceSubcategories)
+      .innerJoin(serviceCategories, eq(serviceCategories.id, serviceSubcategories.categoryId))
+      .where(eq(serviceSubcategories.id, service.subcategoryId))
+      .limit(1);
+
+    return res.status(200).json({
+      service: visibleService,
+      documents,
+      form: form || null,
+      fields,
+      comingSoon: owningCategory?.comingSoon ?? false,
+      categoryName: owningCategory?.name ?? null,
+    });
   } catch (error: any) {
     console.error("Get service by slug error:", error);
     return res.status(500).json({

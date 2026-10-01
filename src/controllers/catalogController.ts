@@ -26,6 +26,7 @@ export async function getCatalog(_req: AuthenticatedRequest, res: Response) {
     const tree = cats.map((c) => ({
       id: c.id,
       name: c.name,
+      comingSoon: c.comingSoon,
       subcategories: subs
         .filter((s) => s.categoryId === c.id)
         .map((s) => ({
@@ -102,10 +103,31 @@ export async function createCategory(req: AuthenticatedRequest, res: Response) {
 export async function updateCategory(req: AuthenticatedRequest, res: Response) {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { name } = req.body;
-    if (isNaN(id) || !name || !name.trim()) return res.status(400).json({ error: "Valid ID and name required" });
-    const [row] = await db.update(serviceCategories).set({ name: name.trim() }).where(eq(serviceCategories.id, id)).returning();
+    const { name, comingSoon } = req.body;
+    if (isNaN(id)) return res.status(400).json({ error: "Valid ID required" });
+
+    // Renaming and flipping the coming-soon flag share this endpoint, and the
+    // admin UI sends only the field it is changing. Build the patch from what
+    // actually arrived so a toggle does not require re-sending the name (and
+    // cannot blank it).
+    const patch: { name?: string; comingSoon?: boolean } = {};
+    if (name !== undefined) {
+      if (!name.trim()) return res.status(400).json({ error: "Category name cannot be empty" });
+      patch.name = name.trim();
+    }
+    if (comingSoon !== undefined) patch.comingSoon = !!comingSoon;
+    if (!Object.keys(patch).length) return res.status(400).json({ error: "Nothing to update" });
+
+    const [row] = await db.update(serviceCategories).set(patch).where(eq(serviceCategories.id, id)).returning();
     if (!row) return res.status(404).json({ error: "Category not found" });
+    if (req.user?.id && patch.comingSoon !== undefined) {
+      await logActivity(
+        req.user.id,
+        `Marked category "${row.name}" ${patch.comingSoon ? "coming soon" : "active"}`,
+        "catalog",
+        row.id,
+      );
+    }
     return res.status(200).json(row);
   } catch (error: any) {
     return res.status(500).json({ error: "Failed to update category" });
