@@ -276,14 +276,19 @@ const stateCombos = (
   baseSlug: string,
   shortPrefix: string,
   authority: string,
-  icon: string
+  icon: string,
+  formNo = "—"
 ): SeedService[] =>
   SOCIETY_STATES.map((st): SeedService => ({
     slug: `${baseSlug}-${st.slug}`,
-    name: st.state,
+    // `name` is what the catalog API returns as `title`, and that value is copied
+    // onto a service request when it is filed. A bare state name therefore left
+    // customers with a request titled just "Telangana", with no sign of which
+    // service it was — so the entity type belongs here, not only in shortTitle.
+    name: `${shortPrefix} · ${st.state}`,
     shortTitle: `${shortPrefix} · ${st.state}`,
     authority,
-    formNo: "—",
+    formNo,
     icon,
     professionalFee: 0,
     govtFee: 0,
@@ -473,7 +478,7 @@ const CATALOG: SeedGroup[] = [
       // directly under their base entity row.
       ...stateCombos("partnership-registered", "Registered", "Registrar of Firms", "Users"),
       ...stateCombos("partnership-unregistered", "Unregistered", "Partnership Deed", "Users"),
-      ...stateCombos("huf", "HUF", "Income Tax", "HomeIcon"),
+      ...stateCombos("huf", "HUF", "Income Tax", "HomeIcon", "HUF Deed"),
       ...stateCombos("sole-proprietorship", "Proprietorship", "—", "Store"),
       ...stateCombos("trust-private", "Private Trust", "Sub-Registrar", "Shield"),
       ...stateCombos("trust-public", "Public Trust", "Charity Commissioner", "Shield"),
