@@ -116,6 +116,7 @@ export async function getPublicCatalog(req: Request, res: Response) {
         documentsCount: services.documentsCount,
         categoryId: serviceCategories.id,
         categoryName: serviceCategories.name,
+        categoryComingSoon: serviceCategories.comingSoon,
       })
       .from(services)
       .innerJoin(serviceSubcategories, eq(services.subcategoryId, serviceSubcategories.id))
@@ -123,17 +124,27 @@ export async function getPublicCatalog(req: Request, res: Response) {
       .where(eq(services.active, true))
       .orderBy(asc(serviceCategories.id), asc(services.id));
 
-    const groups: { label: string; items: any[] }[] = [];
-    const byCategory = new Map<number, { label: string; items: any[] }>();
+    type Group = { id: number; label: string; comingSoon: boolean; items: any[] };
+    const groups: Group[] = [];
+    const byCategory = new Map<number, Group>();
 
     for (const row of rows) {
       if (!row.slug) continue;
       let group = byCategory.get(row.categoryId);
       if (!group) {
-        group = { label: row.categoryName, items: [] };
+        group = {
+          id: row.categoryId,
+          label: row.categoryName,
+          comingSoon: row.categoryComingSoon,
+          items: [],
+        };
         byCategory.set(row.categoryId, group);
         groups.push(group);
       }
+      // A coming-soon category is advertised by name only: the sidebar shows the
+      // heading and links to a notice, and its services are deliberately withheld
+      // so nothing looks available that cannot be filed yet.
+      if (group.comingSoon) continue;
       group.items.push({
         slug: row.slug,
         title: row.name,
@@ -146,7 +157,9 @@ export async function getPublicCatalog(req: Request, res: Response) {
       });
     }
 
-    return res.status(200).json(groups.filter((g) => g.items.length > 0));
+    // Empty groups are normally dead weight, but a coming-soon category is
+    // *meant* to be empty — it still has to appear in the sidebar.
+    return res.status(200).json(groups.filter((g) => g.comingSoon || g.items.length > 0));
   } catch (error: any) {
     console.error("Public catalog error:", error);
     return res.status(500).json({
