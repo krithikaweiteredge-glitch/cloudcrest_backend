@@ -343,6 +343,25 @@ function similarityClause(column: SQL | any, core: string, stem: string) {
   const esc = escapeLike(core);
   const loose = core.length >= LOOSE_MATCH_MIN_LEN;
 
+  /**
+   * Rank 2 asks "is the stored key a prefix of what was typed?". Written as
+   * `core LIKE column || '%'` the column sits on the *pattern* side, so no index
+   * can serve it: Postgres had to sequentially scan all 2.7M rows on every
+   * keystroke (~440ms per table, before the loose clauses even ran).
+   *
+   * The keys that satisfy it are a finite, tiny set — every prefix of `core`. So
+   * ask the same question as equality against that list, which the btree on
+   * core_norm answers with one probe per prefix. No LIKE escaping is needed here
+   * (and a typed `%` now matches literally, as it should).
+   */
+  const prefixes = Array.from({ length: core.length }, (_, i) => core.slice(0, i + 1));
+  const prefixMatch = prefixes.length
+    ? sql`${column} IN (${sql.join(
+        prefixes.map((p) => sql`${p}`),
+        sql`, `,
+      )})`
+    : sql`false`;
+
   // Only worth a separate clause when the head is genuinely shorter than the
   // whole key (i.e. trailing descriptors were dropped) and still substantial.
   const escStem = escapeLike(stem);
@@ -355,7 +374,7 @@ function similarityClause(column: SQL | any, core: string, stem: string) {
     : sql``;
 
   const match = sql`(${column} LIKE ${`${esc}%`} ESCAPE '\\'
-      OR ${core} LIKE ${column} || '%'${looseMatch}${stemMatch})`;
+      OR ${prefixMatch}${looseMatch}${stemMatch})`;
 
   // Lower rank sorts first; length breaks ties so the shortest (closest) brand
   // wins, then name for a stable order across repeated keystrokes.
@@ -366,7 +385,7 @@ function similarityClause(column: SQL | any, core: string, stem: string) {
   const rank = sql`CASE
       WHEN ${column} = ${core} THEN 0
       WHEN ${column} LIKE ${`${esc}%`} ESCAPE '\\' THEN 1
-      WHEN ${core} LIKE ${column} || '%' THEN 2
+      WHEN ${prefixMatch} THEN 2
       WHEN ${column} LIKE ${`%${esc}`} ESCAPE '\\' THEN 3
       WHEN ${column} LIKE ${`%${esc}%`} ESCAPE '\\' THEN 4${stemRank}
       ELSE 6
