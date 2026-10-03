@@ -35,6 +35,10 @@ export const services = pgTable("services", {
   govtFee: decimal("govt_fee", { precision: 12, scale: 2 }).notNull(),
   gstPercent: decimal("gst_percent", { precision: 5, scale: 2 }).notNull(),
   active: boolean("active").default(true).notNull(),
+  // Shown in the home page's shortlist. Which services lead the page is a
+  // merchandising decision that changes with the season, so it belongs to an
+  // admin rather than to a hardcoded list in the frontend.
+  featured: boolean("featured").default(false).notNull(),
   // Customer-facing presentation. A service only appears in the customer sidebar
   // once it has a slug (this keeps legacy seeded rows hidden).
   slug: varchar("slug", { length: 255 }),

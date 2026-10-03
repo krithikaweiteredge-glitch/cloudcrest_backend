@@ -260,7 +260,7 @@ export async function updateService(req: AuthenticatedRequest, res: Response) {
   try {
     const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
-    const { name, description, professionalFee, govtFee, gstPercent, active, subcategoryId, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, timelineDays, documentsCount, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
+    const { name, description, professionalFee, govtFee, gstPercent, active, featured, subcategoryId, slug, shortTitle, authority, formNo, icon, whoCanApply, actsRules, validity, timelineDays, documentsCount, nswsApplied, actsRulesPdfs, tabs, feeLines, wizardRules } = req.body;
 
     const patch: Record<string, any> = {};
     if (name !== undefined) patch.name = String(name).trim();
@@ -269,6 +269,7 @@ export async function updateService(req: AuthenticatedRequest, res: Response) {
     if (govtFee !== undefined) patch.govtFee = feeStr(govtFee);
     if (gstPercent !== undefined) patch.gstPercent = feeStr(gstPercent, "18");
     if (active !== undefined) patch.active = !!active;
+    if (featured !== undefined) patch.featured = !!featured;
     if (subcategoryId !== undefined) patch.subcategoryId = parseInt(subcategoryId as string, 10);
     if (shortTitle !== undefined) patch.shortTitle = shortTitle?.trim() || null;
     if (authority !== undefined) patch.authority = authority?.trim() || null;

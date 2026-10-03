@@ -114,6 +114,7 @@ export async function getPublicCatalog(req: Request, res: Response) {
         formNo: services.formNo,
         timelineDays: services.timelineDays,
         documentsCount: services.documentsCount,
+        featured: services.featured,
         categoryId: serviceCategories.id,
         categoryName: serviceCategories.name,
         categoryComingSoon: serviceCategories.comingSoon,
@@ -154,6 +155,7 @@ export async function getPublicCatalog(req: Request, res: Response) {
         icon: row.icon,
         timelineDays: row.timelineDays,
         documentsCount: row.documentsCount,
+        featured: row.featured,
       });
     }
 
