@@ -234,25 +234,21 @@ export async function checkNameAvailability(req: Request, res: Response) {
           .limit(SIMILAR_PER_TABLE)
       : [];
 
-    if (struck.length > 0) {
-      return res.status(200).json({
-        available: false,
-        reason:
-          `“${trimmedName}” belongs to a struck-off ${struck[0].kind === "llp" ? "LLP" : "company"}: ` +
-          `${struck[0].name}. Struck-off names stay restricted (the entity can be restored within 20 years), ` +
-          `so this name is not available.`,
-        matches: struck.map((r) => ({
-          name: r.name,
-          identifier: r.identifier || undefined,
-          industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
-          entityType: r.kind === "llp" ? "LLP" : "Company",
-          location: r.month || undefined,
-          companyStatus: "Strike Off",
-          status: "Strike Off",
-        })),
-        source: "mca-struck-off",
-      });
-    }
+    // A name can sit in BOTH lists — "Cloudcrest Business Management" is a
+    // struck-off LLP and an active private limited. Returning on the first hit
+    // reported only the struck-off entity, hiding the live company along with
+    // its CIN and incorporation date (struck-off rows carry neither: `month` is
+    // empty throughout the source). So collect these and consult the active
+    // registry before answering.
+    const struckMatches = struck.map((r) => ({
+      name: r.name,
+      identifier: r.identifier || undefined,
+      industry: r.kind === "llp" ? "Limited Liability Partnership" : "Company",
+      entityType: r.kind === "llp" ? "LLP" : "Company",
+      location: r.month || undefined,
+      companyStatus: "Strike Off",
+      status: "Strike Off",
+    }));
 
 
     // Does a company with this name already exist in the active MCA registry? Look up the
@@ -275,14 +271,34 @@ export async function checkNameAvailability(req: Request, res: Response) {
     if (rows.length > 0) {
       const wantedFull = normalizeName(trimmedName);
       const exact = rows.find((r) => normalizeName(r.name) === wantedFull);
-      const reason = exact
+      const base = exact
         ? `“${trimmedName}” is already registered with the MCA: ${exact.name}.`
         : `“${trimmedName}” is not available — a company already uses this name: ${rows[0].name}.`;
+      // Mention the struck-off entity too: it is a second, independent reason the
+      // name is blocked, and it outlives the active company's own status.
+      const reason = struckMatches.length
+        ? `${base} ${struckMatches[0].name} also holds this name as a struck-off entity, ` +
+          `and struck-off names stay restricted for 20 years while restoration is possible.`
+        : base;
       return res.status(200).json({
         available: false,
         reason,
-        matches: rows.map(toMatch),
-        source: "mca",
+        // Active matches lead: they carry the CIN, status and incorporation date.
+        matches: [...rows.map(toMatch), ...struckMatches],
+        source: struckMatches.length ? "mca+struck-off" : "mca",
+      });
+    }
+
+    // Nothing active, but a struck-off entity holds the name.
+    if (struckMatches.length > 0) {
+      return res.status(200).json({
+        available: false,
+        reason:
+          `“${trimmedName}” belongs to a struck-off ${struck[0].kind === "llp" ? "LLP" : "company"}: ` +
+          `${struck[0].name}. Struck-off names stay restricted (the entity can be restored within 20 years), ` +
+          `so this name is not available.`,
+        matches: struckMatches,
+        source: "mca-struck-off",
       });
     }
 
