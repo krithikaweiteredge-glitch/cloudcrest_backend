@@ -1,3 +1,6 @@
 # Generated intermediate data files — rebuild with the parser scripts, don't commit.
 *.csv
 *.log
+# Compressed copies of the same data — ~103MB, and GitHub rejects files this big.
+*.gz
+*.zip

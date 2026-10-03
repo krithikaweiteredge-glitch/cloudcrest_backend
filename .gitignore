@@ -9,6 +9,9 @@ build/
 # Local environment variables
 .env
 .env.local
+# Backups of the above still hold live credentials.
+.env.bak*
+.env.*.bak
 
 # Logs
 npm-debug.log*
